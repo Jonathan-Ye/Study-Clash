@@ -1,0 +1,82 @@
+# ============================================
+# Study Clash Docker Ignore
+# 排除不需要进入 Docker 镜像的文件和目录
+# ============================================
+
+# 版本控制
+.git/
+.gitignore
+
+# Python 缓存和虚拟环境
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# IDE 配置
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# 环境文件（敏感信息通过运行时注入）
+.env
+.env.local
+.env.production
+
+# 数据文件（通过卷挂载持久化）
+data/*.db
+data/*.db-journal
+data/*.db-wal
+backups/
+
+# 测试文件
+tests/
+*.test.py
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+
+# 文档文件
+docs/
+*.md
+LICENSE
+
+# 临时文件
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Docker 相关
+docker-compose*.yml
+.dockerignore
+
+# Flask 相关
+instance/
+flask_session/
+*.session
+
+# Edge case
+logs/
+*.log
+
+# 项目工具目录
+.codeartsdoer/
+.arts/
+scripts/
+
+# 其他
+Windows临时允许.txt
+final_template.xlsx
