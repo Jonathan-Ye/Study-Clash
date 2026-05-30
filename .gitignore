@@ -37,3 +37,23 @@ Thumbs.db
 flask_session/
 *.session
 cookies.json
+
+# Backup files
+*.sql.gz
+*.sql
+backup_*.gz
+backup_*.sql
+
+# Logs
+logs/
+
+# User uploaded content
+app/static/questions/*.png
+app/static/questions/*.jpg
+app/static/avatars/*.png
+!app/static/avatars/default.png
+!app/static/avatars/default.svg
+!app/static/avatars/.gitkeep
+
+# Logo source files
+logo/*.png
