@@ -1,0 +1,210 @@
+{% extends "admin/base.html" %}
+
+{% block title %}AI审计监控 - 管理后台{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+<style>
+.stat-card { transition: transform 0.2s; }
+.stat-card:hover { transform: translateY(-2px); }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4><i class="bi bi-graph-up-arrow"></i> AI审计监控</h4>
+        <button class="btn btn-outline-primary" onclick="refreshAudit()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+        </button>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-cpu" style="font-size:2rem;color:#667eea"></i>
+                    <h5 class="mt-2" id="totalTokens">-</h5>
+                    <small class="text-muted">7日Token消耗</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-telephone" style="font-size:2rem;color:#28a745"></i>
+                    <h5 class="mt-2" id="totalCalls">-</h5>
+                    <small class="text-muted">7日调用次数</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-exclamation-triangle" style="font-size:2rem;color:#dc3545"></i>
+                    <h5 class="mt-2" id="fallbackCount">-</h5>
+                    <small class="text-muted">降级事件</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm stat-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-hourglass-split" style="font-size:2rem;color:#ffc107"></i>
+                    <h5 class="mt-2" id="budgetStatus">-</h5>
+                    <small class="text-muted">Token预算状态</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#logs">调用日志</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#fallbacks">降级事件</a></li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="logs">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="logTaskType" onchange="loadLogs()">
+                                <option value="">全部任务类型</option>
+                                <option value="attribution">归因分析</option>
+                                <option value="prediction">推理预测</option>
+                                <option value="strategy">策略辅助</option>
+                                <option value="explanation">解析生成</option>
+                                <option value="variant">变式题生成</option>
+                                <option value="practice">练习生成</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="logStatus" onchange="loadLogs()">
+                                <option value="">全部状态</option>
+                                <option value="success">成功</option>
+                                <option value="failed">失败</option>
+                                <option value="timeout">超时</option>
+                                <option value="budget_exceeded">预算超限</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="logsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>时间</th>
+                                    <th>任务类型</th>
+                                    <th>模型</th>
+                                    <th>Token</th>
+                                    <th>耗时</th>
+                                    <th>状态</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="6" class="text-center text-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <nav id="logsPagination"></nav>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="fallbacks">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="fallbacksTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>时间</th>
+                                    <th>从服务商</th>
+                                    <th>到服务商</th>
+                                    <th>任务类型</th>
+                                    <th>原因</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5" class="text-center text-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+let logsPage = 1;
+
+function refreshAudit() {
+    loadTokenStats();
+    loadFallbacks();
+    loadLogs();
+}
+
+function loadTokenStats() {
+    fetch('/ai/admin/audit/token-stats?time_range=7d', {
+        headers: {'X-CSRFToken': csrfToken}
+    }).then(r => r.json()).then(data => {
+        document.getElementById('totalTokens').textContent = data.total_tokens.toLocaleString();
+        document.getElementById('totalCalls').textContent = data.total_calls.toLocaleString();
+        const statusEl = document.getElementById('budgetStatus');
+        statusEl.textContent = data.total_tokens > 0 ? '正常' : '未使用';
+    }).catch(() => {});
+}
+
+function loadLogs() {
+    const taskType = document.getElementById('logTaskType').value;
+    const status = document.getElementById('logStatus').value;
+    fetch(`/ai/admin/audit/logs?page=${logsPage}&per_page=20&task_type=${taskType}&status=${status}`, {
+        headers: {'X-CSRFToken': csrfToken}
+    }).then(r => r.json()).then(data => {
+        const tbody = document.querySelector('#logsTable tbody');
+        if (!data.logs || data.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无日志</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.logs.map(l => {
+            const statusBadge = l.status === 'success' ? 'bg-success' : l.status === 'timeout' ? 'bg-warning' : 'bg-danger';
+            return `<tr>
+                <td><small>${l.created_at ? l.created_at.substring(0,16) : '-'}</small></td>
+                <td><span class="badge bg-info">${l.task_type}</span></td>
+                <td><small>${l.model_name || '-'}</small></td>
+                <td>${l.total_tokens}</td>
+                <td>${l.duration_ms ? l.duration_ms + 'ms' : '-'}</td>
+                <td><span class="badge ${statusBadge}">${l.status}</span></td>
+            </tr>`;
+        }).join('');
+    }).catch(() => {});
+}
+
+function loadFallbacks() {
+    fetch('/ai/admin/audit/fallback-events', {
+        headers: {'X-CSRFToken': csrfToken}
+    }).then(r => r.json()).then(data => {
+        document.getElementById('fallbackCount').textContent = (data.events || []).length;
+        const tbody = document.querySelector('#fallbacksTable tbody');
+        if (!data.events || data.events.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无降级事件</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.events.map(e => `<tr>
+            <td><small>${e.created_at ? e.created_at.substring(0,16) : '-'}</small></td>
+            <td>服务商#${e.from_provider_id}</td>
+            <td>服务商#${e.to_provider_id}</td>
+            <td>${e.task_type}</td>
+            <td><small class="text-muted">${e.reason || '-'}</small></td>
+        </tr>`).join('');
+    }).catch(() => {});
+}
+
+document.addEventListener('DOMContentLoaded', refreshAudit);
+</script>
+{% endblock %}

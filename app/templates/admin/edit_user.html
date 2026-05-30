@@ -1,0 +1,309 @@
+{% extends "admin/base.html" %}
+
+{% block title %}编辑用户 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pencil"></i> 编辑用户信息</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" name="username" value="{{ user.username }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">邮箱</label>
+                            <input type="email" class="form-control" name="email" value="{{ user.email }}" required>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h6 class="mb-3">基本信息</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">昵称</label>
+                            <input type="text" class="form-control" name="nickname" value="{{ user.nickname or '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">姓名 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="real_name" value="{{ user.real_name or '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">学号 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="student_id" value="{{ user.student_id or '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">手机号码</label>
+                            <input type="tel" class="form-control" name="phone" value="{{ user.phone or '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">生日</label>
+                            <input type="date" class="form-control" name="birthday" value="{{ user.birthday.strftime('%Y-%m-%d') if user.birthday else '' }}">
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h6 class="mb-3">学校信息</h6>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">学校</label>
+                            <select class="form-select" name="school">
+                                <option value="">请选择学校</option>
+                                {% for option in dict_options.schools %}
+                                <option value="{{ option.value }}" {{ 'selected' if user.school == option.value }}>{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">年级</label>
+                            <select class="form-select" name="grade">
+                                <option value="">请选择年级</option>
+                                {% for option in dict_options.grades %}
+                                <option value="{{ option.value }}" {{ 'selected' if user.grade == option.value }}>{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">专业/方向</label>
+                            <select class="form-select" name="major">
+                                <option value="">请选择专业</option>
+                                {% for option in dict_options.majors %}
+                                <option value="{{ option.value }}" {{ 'selected' if user.major == option.value }}>{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">班级</label>
+                            <select class="form-select" name="class_name">
+                                <option value="">请选择班级</option>
+                                {% for option in dict_options.classes %}
+                                <option value="{{ option.value }}" {{ 'selected' if user.class_name == option.value }}>{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6 class="mb-3">账户设置</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">新密码（留空则不修改）</label>
+                            <input type="password" class="form-control" name="new_password" placeholder="输入新密码">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">当前积分</label>
+                            <input type="text" class="form-control" value="{{ user.total_points }}" disabled>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><i class="bi bi-person-badge"></i> 用户角色</label>
+                            <select class="form-select" name="role" id="role">
+                                <option value="student" {{ 'selected' if user.role == 'student' }}>学生</option>
+                                <option value="teacher" {{ 'selected' if user.role == 'teacher' }}>教师</option>
+                                <option value="admin" {{ 'selected' if user.role == 'admin' }}>管理员</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="can_edit_profile" name="can_edit_profile" {{ 'checked' if user.can_edit_profile }}>
+                                <label class="form-check-label" for="can_edit_profile">允许修改资料</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="is_active" name="is_active" {{ 'checked' if user.is_active }}>
+                                <label class="form-check-label" for="is_active">账户激活</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="participate_in_games" name="participate_in_games" {{ 'checked' if user.participate_in_games }}>
+                                <label class="form-check-label" for="participate_in_games"><i class="bi bi-controller"></i> 参与游戏对决</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" class="form-check-input" id="show_in_leaderboard" name="show_in_leaderboard" {{ 'checked' if user.show_in_leaderboard }}>
+                                <label class="form-check-label" for="show_in_leaderboard"><i class="bi bi-trophy"></i> 显示在排行榜</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 教师权限控制区域 -->
+                    <div id="teacherPermissions" class="mb-3" style="{{ 'display:none' if user.role != 'teacher' }}">
+                        <hr>
+                        <h6 class="mb-3"><i class="bi bi-shield-lock"></i> 教师功能权限</h6>
+                        <p class="text-muted small mb-3">控制该教师账号可以访问的功能模块，取消勾选将隐藏对应功能。</p>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-muted small fw-bold mb-2"><i class="bi bi-book"></i> 内容管理</h6>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_manage_subjects" name="can_manage_subjects" {{ 'checked' if user.can_manage_subjects }}>
+                                    <label class="form-check-label" for="can_manage_subjects"><i class="bi bi-journal-text"></i> 学科管理</label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_manage_chapters" name="can_manage_chapters" {{ 'checked' if user.can_manage_chapters }}>
+                                    <label class="form-check-label" for="can_manage_chapters"><i class="bi bi-list-ul"></i> 章节管理</label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_manage_questions" name="can_manage_questions" {{ 'checked' if user.can_manage_questions }}>
+                                    <label class="form-check-label" for="can_manage_questions"><i class="bi bi-question-circle"></i> 题目管理</label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_import_questions" name="can_import_questions" {{ 'checked' if user.can_import_questions }}>
+                                    <label class="form-check-label" for="can_import_questions"><i class="bi bi-upload"></i> 题库导入</label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_export_questions" name="can_export_questions" {{ 'checked' if user.can_export_questions }}>
+                                    <label class="form-check-label" for="can_export_questions"><i class="bi bi-download"></i> 题库导出</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted small fw-bold mb-2"><i class="bi bi-people"></i> 学生管理</h6>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_import_students" name="can_import_students" {{ 'checked' if user.can_import_students }}>
+                                    <label class="form-check-label" for="can_import_students"><i class="bi bi-person-plus"></i> 学生导入</label>
+                                </div>
+                                
+                                <h6 class="text-muted small fw-bold mb-2 mt-3"><i class="bi bi-graph-up"></i> 数据分析</h6>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_view_student_analysis" name="can_view_student_analysis" {{ 'checked' if user.can_view_student_analysis }}>
+                                    <label class="form-check-label" for="can_view_student_analysis"><i class="bi bi-mortarboard"></i> 学生分析</label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" class="form-check-input" id="can_view_knowledge_analysis" name="can_view_knowledge_analysis" {{ 'checked' if user.can_view_knowledge_analysis }}>
+                                    <label class="form-check-label" for="can_view_knowledge_analysis"><i class="bi bi-graph-up-arrow"></i> 知识点分析</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="toggleAllPermissions(true)"><i class="bi bi-check-all"></i> 全部开启</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="toggleAllPermissions(false)"><i class="bi bi-x-lg"></i> 全部关闭</button>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> 返回
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i> 保存修改
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-star"></i> 积分调整</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.adjust_user_points', id=user.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">积分</label>
+                        <input type="number" class="form-control" name="points" id="pointsInput" placeholder="输入积分值">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">调整类型</label>
+                        <select class="form-select" name="reason" id="reasonSelect">
+                            <option value="admin_add">增加积分</option>
+                            <option value="admin_deduct">扣除积分</option>
+                            <option value="bonus">活动奖励</option>
+                            <option value="correction">管理员修正</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100" id="submitBtn">
+                        <i class="bi bi-plus-circle"></i> 调整积分
+                    </button>
+                </form>
+                <script>
+                    document.getElementById('reasonSelect').addEventListener('change', function() {
+                        const pointsInput = document.getElementById('pointsInput');
+                        const submitBtn = document.getElementById('submitBtn');
+                        if (this.value === 'correction') {
+                            pointsInput.placeholder = '修正为指定积分值';
+                            submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> 修正积分';
+                        } else if (this.value === 'admin_add') {
+                            pointsInput.placeholder = '要增加的积分数量';
+                            submitBtn.innerHTML = '<i class="bi bi-plus-circle"></i> 增加积分';
+                        } else if (this.value === 'admin_deduct') {
+                            pointsInput.placeholder = '要扣除的积分数量';
+                            submitBtn.innerHTML = '<i class="bi bi-dash-circle"></i> 扣除积分';
+                        } else {
+                            pointsInput.placeholder = '奖励的积分数量';
+                            submitBtn.innerHTML = '<i class="bi bi-gift"></i> 发放奖励';
+                        }
+                    });
+                </script>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> 危险操作</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">删除用户将同时删除该用户的所有数据，此操作不可恢复。</p>
+                <form method="POST" action="{{ url_for('admin.delete_user', id=user.id) }}" 
+                      onsubmit="return confirm('确定要删除此用户吗？此操作不可恢复！');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if user.id != current_user.id %}
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-trash"></i> 删除用户
+                    </button>
+                    {% else %}
+                    <button type="button" class="btn btn-danger w-100" disabled>
+                        不能删除自己
+                    </button>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 角色切换时显示/隐藏教师权限区域
+document.getElementById('role').addEventListener('change', function() {
+    const permSection = document.getElementById('teacherPermissions');
+    permSection.style.display = this.value === 'teacher' ? '' : 'none';
+});
+
+// 全部开启/关闭权限
+function toggleAllPermissions(checked) {
+    const checkboxes = document.querySelectorAll('#teacherPermissions input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+</script>
+{% endblock %}

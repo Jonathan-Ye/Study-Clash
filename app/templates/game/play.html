@@ -1,0 +1,3387 @@
+{% extends "base.html" %}
+
+{% block title %}答题中 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <!-- 移动端紧凑信息栏 (仅 <768px 显示) -->
+    <div class="mobile-info-bar" id="mobile-info-bar">
+        <div class="mobile-info-item">
+            <i class="bi bi-clock-fill"></i>
+            <span id="mobile-timer">00:00</span>
+        </div>
+        {% if room.game_type == 'single' %}
+        <div class="mobile-info-item">
+            <i class="bi bi-fire"></i>
+            <span id="mobile-streak">0</span>
+        </div>
+        <div class="mobile-info-item">
+            <i class="bi bi-heart-fill"></i>
+            <span id="mobile-chances">{{ single_wrong_chances }}</span>
+        </div>
+        {% else %}
+        <div class="mobile-info-item">
+            <i class="bi bi-list-ol"></i>
+            <span id="mobile-progress">1/{{ questions|length }}</span>
+        </div>
+        <div class="mobile-info-item">
+            <i class="bi bi-check-circle-fill"></i>
+            <span id="mobile-correct">0</span>
+        </div>
+        {% endif %}
+        {% if room.game_type != 'single' %}
+        <button class="mobile-players-toggle" onclick="toggleMobilePlayers()">
+            <i class="bi bi-people-fill"></i>
+        </button>
+        {% endif %}
+    </div>
+    <!-- 移动端对手进度折叠区 -->
+    {% if room.game_type != 'single' %}
+    <div class="mobile-players-panel collapse" id="mobile-players-panel">
+        <div class="mobile-players-inner" id="mobile-players-inner">
+            <!-- 动态渲染对手信息 -->
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 平板端侧边栏切换按钮 -->
+    <button class="sidebar-toggle-btn" id="sidebar-toggle" onclick="toggleSidebar()">
+        <i class="bi bi-layout-sidebar-reverse"></i>
+    </button>
+    <!-- 平板端遮罩层 -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- 双栏布局容器 -->
+    <div class="quiz-layout">
+        <!-- 主内容区 -->
+        <div class="quiz-main">
+            <!-- 断连提示条 -->
+            <div class="disconnect-bar" id="disconnect-bar" style="display:none;">
+                <i class="bi bi-wifi-off"></i>
+                <span id="disconnect-text">连接已断开</span>
+                <button class="btn-reconnect" id="btn-reconnect" onclick="reconnectGame()">重新连接</button>
+            </div>
+            <!-- 题目区域 -->
+            <div id="question-container" class="question-wrapper">
+                {% for question in questions %}
+                {% set q_index = loop.index %}
+                <div class="question-card" id="question-{{ q_index }}" style="display: {% if loop.index == resume_data.current_question_index %}block{% else %}none{% endif %}">
+                    <!-- 题目内容 -->
+                    <div class="question-body">
+                        <h3 class="question-title" id="question-content-{{ q_index }}">
+                            <span class="question-number">{{ q_index }}.</span>
+                            {{ question.content }}
+                        </h3>
+                        
+                        <!-- 题型提示 -->
+                        <div class="question-type-hint {{ question.question_type }}">
+                            {% if question.question_type == 'single' %}
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span>请选择<strong>一个</strong>正确答案</span>
+                            {% elif question.question_type == 'multiple' %}
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span>请选择<strong>所有</strong>正确答案（多选）</span>
+                            {% else %}
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span>请判断以下说法是否正确</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if question.image_url %}
+                        <div class="question-image" onclick="showImageLightbox(this.querySelector('img').src)" style="cursor:zoom-in;">
+                            <img src="{{ fix_image_url(question.image_url) }}" alt="题目图片" class="img-fluid">
+                        </div>
+                        {% endif %}
+                        
+                        <!-- 选项区域 -->
+                        <div class="options-container {% if question.question_type == 'judge' %}judge-options{% elif question.question_type == 'multiple' %}multiple-options{% endif %}" id="options-{{ q_index }}">
+                            {% for option_key, option_value, option_image in question.get_options() %}
+                            <div class="option-item {% if question.question_type == 'judge' %}judge-option{% elif question.question_type == 'multiple' %}multiple-option{% endif %}" 
+                                 data-option="{{ option_key }}" 
+                                 data-judge-value="{{ 'correct' if option_key == 'A' else 'wrong' if option_key == 'B' else '' }}"
+                                 onclick="selectOption(this, {{ q_index }})">
+                                <div class="option-selector">
+                                    <input type="{{ 'radio' if question.question_type in ['single', 'judge'] else 'checkbox' }}" 
+                                           name="answer-{{ q_index }}" id="option-{{ q_index }}-{{ option_key }}" 
+                                           value="{{ option_key }}">
+                                    <span class="checkmark"></span>
+                                </div>
+                                <div class="option-content">
+                                    {% if question.question_type == 'judge' %}
+                                    <span class="judge-icon">
+                                        {% if option_key == 'A' %}
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        {% else %}
+                                        <i class="bi bi-x-circle-fill"></i>
+                                        {% endif %}
+                                    </span>
+                                    <span class="judge-text">{{ option_value }}</span>
+                                    {% else %}
+                                    <span class="option-letter">{{ option_key }}</span>
+                                    <div class="option-text-wrapper">
+                                        <span class="option-text">{{ option_value }}</span>
+                                        {% if option_image %}
+                                        <img src="{{ option_image }}" alt="选项图片" class="option-image" onclick="showImageLightbox(this.src)" style="cursor:zoom-in;">
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <input type="hidden" id="question-id-{{ q_index }}" value="{{ question.id }}">
+                    </div>
+                    
+                    <!-- 提交按钮 (sticky) -->
+                    <div class="question-footer">
+                        <button class="btn-submit" onclick="submitAnswer({{ q_index }})">
+                            <span class="btn-text">提交答案</span>
+                            <i class="bi bi-arrow-right-circle"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- 等待对手 -->
+            <div id="waiting-container" class="result-card waiting" style="display: none;">
+                <div class="result-icon">
+                    <div class="spinner">
+                        <div class="bounce1"></div>
+                        <div class="bounce2"></div>
+                        <div class="bounce3"></div>
+                    </div>
+                </div>
+                <h3 class="result-title">答题完成！</h3>
+                <p class="result-desc" id="waiting-text">等待对手完成答题...</p>
+                <div class="progress-bar-animated">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- 结果展示 -->
+            <div id="result-container" class="result-card" style="display: none;">
+                {% if room.game_type == 'single' %}
+                <!-- 单人挑战结果 -->
+                <div class="result-banner streak-banner">
+                    <div class="result-banner-icon"><i class="bi bi-fire"></i></div>
+                    <div class="result-banner-content">
+                        <h2 id="result-title" class="result-banner-title">连胜结束</h2>
+                        <div class="result-banner-subtitle" id="final-time-display">用时 00:00</div>
+                    </div>
+                </div>
+                <div class="result-body-area">
+                    <div class="result-big-stat">
+                        <span class="result-big-value" id="final-streak">0</span>
+                        <span class="result-big-label">连胜题数</span>
+                    </div>
+                    <div class="result-detail-row">
+                        <div class="result-detail-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>答对 <strong id="my-final-correct">0</strong></span>
+                        </div>
+                        <div class="result-detail-item">
+                            <i class="bi bi-x-circle-fill"></i>
+                            <span>答错 <strong id="my-final-wrong">0</strong></span>
+                        </div>
+                        <div class="result-detail-item">
+                            <i class="bi bi-clock-fill"></i>
+                            <span id="final-time">00:00</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <!-- 多人对战结果 -->
+                <div class="result-banner" id="result-banner">
+                    <div class="result-banner-icon" id="result-banner-icon"><i class="bi bi-trophy-fill"></i></div>
+                    <div class="result-banner-content">
+                        <h2 id="result-title" class="result-banner-title"></h2>
+                        <div class="result-banner-subtitle" id="result-banner-sub"></div>
+                    </div>
+                </div>
+                <div class="result-body-area">
+                    <!-- 积分大号展示 -->
+                    <div class="result-points-highlight">
+                        <div class="result-points-icon"><i class="bi bi-star-fill"></i></div>
+                        <div class="result-points-info">
+                            <span class="result-points-value" id="points-earned">+0</span>
+                            <span class="result-points-label">获得积分</span>
+                        </div>
+                    </div>
+                    {% if room.game_type == 'four' %}
+                    <div id="four-players-ranking" class="result-ranking-compact">
+                        <div class="ranking-list" id="ranking-list"></div>
+                    </div>
+                    {% else %}
+                    <div class="result-ranking-compact">
+                        <div class="battle-ranking-list" id="battle-ranking-list"></div>
+                    </div>
+                    {% endif %}
+                    <div class="result-meta-row">
+                        <div class="result-meta-chip">
+                            <i class="bi bi-graph-up-arrow"></i>
+                            <span>排名 <strong id="rank-change">-</strong></span>
+                        </div>
+                        <div class="result-meta-chip">
+                            <i class="bi bi-clock-fill"></i>
+                            <span>用时 <strong id="result-time">00:00</strong></span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="result-actions">
+                    <button class="btn-result btn-rematch" onclick="rematchGame()">
+                        <i class="bi bi-arrow-repeat"></i>
+                        <span>再来一局</span>
+                    </button>
+                    {% if room.game_type != 'single' %}
+                    <button class="btn-result btn-change-opponent" onclick="changeOpponent()">
+                        <i class="bi bi-people"></i>
+                        <span>换个对手</span>
+                    </button>
+                    {% endif %}
+                    <a href="{{ url_for('game.index') }}" class="btn-result btn-back-lobby">
+                        <i class="bi bi-house-fill"></i>
+                        <span>返回大厅</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 再来一局邀约弹窗 -->
+            <div class="rematch-overlay" id="rematch-overlay" style="display:none;">
+                <div class="rematch-modal">
+                    <div class="rematch-modal-icon"><i class="bi bi-arrow-repeat"></i></div>
+                    <h3 class="rematch-modal-title" id="rematch-modal-title">再来一局</h3>
+                    <p class="rematch-modal-desc" id="rematch-modal-desc"></p>
+                    <div class="rematch-modal-countdown" id="rematch-modal-countdown" style="display:none;">
+                        <span id="rematch-countdown-num">15</span>s 后自动拒绝
+                    </div>
+                    <div class="rematch-modal-actions" id="rematch-modal-actions">
+                        <button class="btn-rematch-accept" onclick="acceptRematch()">
+                            <i class="bi bi-check-circle-fill"></i> 同意
+                        </button>
+                        <button class="btn-rematch-decline" onclick="declineRematch()">
+                            <i class="bi bi-x-circle-fill"></i> 拒绝
+                        </button>
+                    </div>
+                    <div class="rematch-modal-waiting" id="rematch-modal-waiting" style="display:none;">
+                        <div class="rematch-spinner"></div>
+                        <span id="rematch-waiting-text">等待其他玩家同意...</span>
+                        <button class="btn-rematch-cancel" onclick="cancelRematch()">
+                            <i class="bi bi-arrow-left-circle-fill"></i> 返回
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图片灯箱 -->
+            <div class="image-lightbox" id="image-lightbox" onclick="hideImageLightbox()">
+                <div class="lightbox-backdrop"></div>
+                <div class="lightbox-content" onclick="event.stopPropagation()">
+                    <button class="lightbox-close" onclick="hideImageLightbox()"><i class="bi bi-x-lg"></i></button>
+                    <img id="lightbox-img" src="" alt="放大查看">
+                </div>
+            </div>
+        </div>
+
+        <!-- 侧边栏 -->
+        <aside class="quiz-sidebar" id="quiz-sidebar">
+            <div class="sidebar-inner">
+
+                <!-- 计时器区 -->
+                <div class="sidebar-section sidebar-timer-section">
+                    <div class="sidebar-timer-display">
+                        <i class="bi bi-clock-fill"></i>
+                        <span id="sidebar-timer" class="sidebar-timer-value">00:00</span>
+                    </div>
+                </div>
+
+                <!-- 进度/得分区 -->
+                {% if room.game_type == 'single' %}
+                <div class="sidebar-section sidebar-progress-section">
+                    <div class="sidebar-question-progress">
+                        <span>第 <strong id="sidebar-current-question">1</strong> / {{ questions|length }} 题</span>
+                    </div>
+                    <div class="sidebar-progress-bar-wrapper">
+                        <div class="sidebar-progress-bar">
+                            <div class="sidebar-progress-fill" id="sidebar-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <span class="sidebar-progress-percent" id="sidebar-progress-percent">0%</span>
+                    </div>
+                    <div class="sidebar-streak">
+                        <div class="sidebar-streak-number" id="sidebar-streak-number">0</div>
+                        <div class="sidebar-streak-label">连胜题数</div>
+                    </div>
+                    <div class="sidebar-chances">
+                        <div class="sidebar-chances-label">剩余机会</div>
+                        <div class="sidebar-chances-hearts" id="sidebar-chances-hearts">
+                            {% for i in range(single_wrong_chances) %}
+                            <i class="bi bi-heart-fill heart-icon" id="sidebar-heart-{{ loop.index }}"></i>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="sidebar-section sidebar-progress-section">
+                    <div class="sidebar-question-progress">
+                        <span>第 <strong id="sidebar-current-question">1</strong> / {{ questions|length }} 题</span>
+                    </div>
+                    <div class="sidebar-my-stats">
+                        <span class="correct"><i class="bi bi-check-circle-fill"></i> 答对 <span id="sidebar-my-correct">0</span></span>
+                        <span class="wrong"><i class="bi bi-x-circle-fill"></i> 答错 <span id="sidebar-my-wrong">0</span></span>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- 对战信息区 (多人模式) -->
+                {% if room.game_type != 'single' %}
+                <div class="sidebar-section sidebar-players-section">
+                    <div class="sidebar-section-title">对手进度</div>
+                    {% if room.game_type == 'battle' %}
+                    <div class="sidebar-player-card" id="sidebar-player-1">
+                        <div class="sidebar-player-header">
+                            <img class="sidebar-player-avatar" id="sidebar-player-1-avatar" src="{{ url_for('static', filename='avatars/default.png') }}" alt="对手">
+                            <span class="sidebar-player-name" id="sidebar-player-1-label">对手</span>
+                        </div>
+                        <div class="sidebar-player-stats">
+                            <span class="correct"><i class="bi bi-check-circle-fill"></i> <span id="sidebar-player-1-correct">0</span></span>
+                            <span class="wrong"><i class="bi bi-x-circle-fill"></i> <span id="sidebar-player-1-wrong">0</span></span>
+                        </div>
+                        <div class="sidebar-player-progress">
+                            <div class="progress">
+                                <div class="progress-bar bg-info" id="sidebar-player-1-progress-bar" style="width:0%"></div>
+                            </div>
+                            <span class="sidebar-progress-text" id="sidebar-player-1-progress-text">0/{{ questions|length }}</span>
+                        </div>
+                    </div>
+                    {% elif room.game_type == 'four' %}
+                    <div class="sidebar-player-compact" id="sidebar-player-1">
+                        <div class="sidebar-player-compact-header">
+                            <img class="sidebar-player-compact-avatar" id="sidebar-player-1-avatar" src="{{ url_for('static', filename='avatars/default.png') }}" alt="玩家2">
+                            <span class="sidebar-player-compact-name" id="sidebar-player-1-label">玩家2</span>
+                            <span class="sidebar-player-compact-correct"><i class="bi bi-check-circle-fill"></i> <span id="sidebar-player-1-correct">0</span></span>
+                        </div>
+                        <div class="sidebar-player-compact-progress">
+                            <div class="progress">
+                                <div class="progress-bar bg-info" id="sidebar-player-1-progress-bar" style="width:0%"></div>
+                            </div>
+                            <span class="sidebar-progress-text compact" id="sidebar-player-1-progress-text">0/{{ questions|length }}</span>
+                        </div>
+                    </div>
+                    <div class="sidebar-player-compact" id="sidebar-player-2">
+                        <div class="sidebar-player-compact-header">
+                            <img class="sidebar-player-compact-avatar" id="sidebar-player-2-avatar" src="{{ url_for('static', filename='avatars/default.png') }}" alt="玩家3">
+                            <span class="sidebar-player-compact-name" id="sidebar-player-2-label">玩家3</span>
+                            <span class="sidebar-player-compact-correct"><i class="bi bi-check-circle-fill"></i> <span id="sidebar-player-2-correct">0</span></span>
+                        </div>
+                        <div class="sidebar-player-compact-progress">
+                            <div class="progress">
+                                <div class="progress-bar bg-warning" id="sidebar-player-2-progress-bar" style="width:0%"></div>
+                            </div>
+                            <span class="sidebar-progress-text compact" id="sidebar-player-2-progress-text">0/{{ questions|length }}</span>
+                        </div>
+                    </div>
+                    <div class="sidebar-player-compact" id="sidebar-player-3">
+                        <div class="sidebar-player-compact-header">
+                            <img class="sidebar-player-compact-avatar" id="sidebar-player-3-avatar" src="{{ url_for('static', filename='avatars/default.png') }}" alt="玩家4">
+                            <span class="sidebar-player-compact-name" id="sidebar-player-3-label">玩家4</span>
+                            <span class="sidebar-player-compact-correct"><i class="bi bi-check-circle-fill"></i> <span id="sidebar-player-3-correct">0</span></span>
+                        </div>
+                        <div class="sidebar-player-compact-progress">
+                            <div class="progress">
+                                <div class="progress-bar bg-danger" id="sidebar-player-3-progress-bar" style="width:0%"></div>
+                            </div>
+                            <span class="sidebar-progress-text compact" id="sidebar-player-3-progress-text">0/{{ questions|length }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- 题目元信息区 -->
+                <div class="sidebar-section sidebar-meta-section">
+                    <div class="sidebar-section-title">题目信息</div>
+                    <div class="sidebar-meta-badges">
+                        <span class="badge type-badge {{ questions[0].question_type }}" id="sidebar-type-badge">
+                            <i class="bi bi-{{ 'check-circle' if questions[0].question_type == 'single' else 'check-all' if questions[0].question_type == 'multiple' else 'patch-check' }}"></i>
+                            {{ '单选题' if questions[0].question_type == 'single' else '多选题' if questions[0].question_type == 'multiple' else '判断题' }}
+                        </span>
+                        <span class="badge difficulty-badge level-{{ questions[0].difficulty }}" id="sidebar-difficulty-badge">
+                            <i class="bi bi-lightning-fill"></i>
+                            {{ ['简单', '中等', '困难', '极难'][questions[0].difficulty - 1] if questions[0].difficulty <= 4 else '困难' }}
+                        </span>
+                    </div>
+                    <div class="sidebar-feedback-btn">
+                        <button class="btn-feedback" onclick="openFeedbackModal(questionIds[currentQuestion - 1])">
+                            <i class="bi bi-flag-fill"></i>
+                            <span>反馈题目问题</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+    </div>
+</div>
+
+{% include 'components/feedback_modal.html' %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 答题容器 */
+.quiz-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 双栏布局 */
+.quiz-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.quiz-main {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 侧边栏 */
+.quiz-sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* 侧边栏分区 */
+.sidebar-section {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.sidebar-section-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* 计时器区 */
+.sidebar-timer-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-align: center;
+    padding: 20px 16px;
+}
+
+.sidebar-timer-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.sidebar-timer-display i {
+    font-size: 1.3rem;
+}
+
+.sidebar-timer-value {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+
+/* 进度/得分区 - 单人模式 */
+.sidebar-question-progress {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.sidebar-question-progress strong {
+    color: #667eea;
+    font-size: 1.3rem;
+}
+
+.sidebar-progress-bar-wrapper {
+    margin-bottom: 16px;
+    position: relative;
+}
+
+.sidebar-progress-bar {
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.sidebar-progress-fill {
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    transition: width 0.5s ease;
+    position: relative;
+}
+
+.sidebar-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.sidebar-progress-percent {
+    display: block;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.sidebar-streak {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.sidebar-streak-number {
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+.sidebar-streak-label {
+    font-size: 0.9rem;
+    color: #6b7280;
+    margin-top: 6px;
+}
+
+.sidebar-chances {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f9fafb;
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.sidebar-chances-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.sidebar-chances-hearts {
+    display: flex;
+    gap: 6px;
+}
+
+.heart-icon {
+    font-size: 1.3rem;
+    color: #ff6b6b;
+    transition: all 0.3s ease;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.heart-icon.lost {
+    color: rgba(0,0,0,0.15);
+    transform: scale(0.9);
+    filter: none;
+}
+
+/* 进度/得分区 - 对战模式 */
+.sidebar-question-progress {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.sidebar-question-progress strong {
+    color: #667eea;
+    font-size: 1.3rem;
+}
+
+.sidebar-my-stats {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.sidebar-my-stats .correct {
+    color: #10b981;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.sidebar-my-stats .wrong {
+    color: #ef4444;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* 对战信息区 - 双人模式 */
+.sidebar-player-card {
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 12px;
+}
+
+.sidebar-player-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.sidebar-player-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e5e7eb;
+}
+
+.sidebar-player-name {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.95rem;
+}
+
+.sidebar-player-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+}
+
+.sidebar-player-stats .correct { color: #10b981; font-weight: 600; }
+.sidebar-player-stats .wrong { color: #ef4444; font-weight: 600; }
+
+.sidebar-player-progress {
+    position: relative;
+}
+
+.sidebar-player-progress .progress {
+    height: 8px;
+    border-radius: 6px;
+    background: #e5e7eb;
+    overflow: hidden;
+}
+
+.sidebar-player-progress .progress-bar {
+    border-radius: 6px;
+    transition: width 0.5s ease;
+}
+
+.sidebar-progress-text {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-weight: 600;
+    margin-top: 4px;
+    display: block;
+    text-align: right;
+}
+
+.sidebar-progress-text.compact {
+    font-size: 0.7rem;
+}
+
+/* 对战信息区 - 四人模式紧凑列表 */
+.sidebar-player-compact {
+    padding: 10px 12px;
+    background: #f9fafb;
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+
+.sidebar-player-compact:last-child {
+    margin-bottom: 0;
+}
+
+.sidebar-player-compact-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.sidebar-player-compact-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.sidebar-player-compact-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-player-compact-correct {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #10b981;
+    flex-shrink: 0;
+}
+
+.sidebar-player-compact-progress {
+    position: relative;
+}
+
+.sidebar-player-compact-progress .progress {
+    height: 6px;
+    border-radius: 4px;
+    background: #e5e7eb;
+    overflow: hidden;
+}
+
+.sidebar-player-compact-progress .progress-bar {
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+/* 题目元信息区 */
+.sidebar-meta-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sidebar-feedback-btn {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.btn-feedback {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+    border: 1.5px solid #ef4444;
+    border-radius: 10px;
+    color: #dc2626;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 10;
+    pointer-events: auto;
+}
+
+.btn-feedback:hover {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-feedback:active {
+    transform: translateY(0);
+}
+
+.btn-feedback i {
+    font-size: 1rem;
+}
+
+.badge.type-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+.badge.type-badge i {
+    font-size: 0.95rem;
+}
+
+.badge.type-badge.single {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    color: #5a67d8;
+    border-color: #667eea;
+}
+
+.badge.type-badge.multiple {
+    background: linear-gradient(135deg, rgba(17, 153, 142, 0.15) 0%, rgba(45, 206, 137, 0.15) 100%);
+    color: #0d9488;
+    border-color: #11998e;
+}
+
+.badge.type-badge.judge {
+    background: linear-gradient(135deg, rgba(240, 147, 251, 0.15) 0%, rgba(245, 87, 108, 0.15) 100%);
+    color: #db2777;
+    border-color: #f093fb;
+}
+
+.badge.difficulty-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 14px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.badge.difficulty-badge.level-1 {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.badge.difficulty-badge.level-2 {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.badge.difficulty-badge.level-3 {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.badge.difficulty-badge.level-4 {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+}
+
+/* 题目卡片 */
+.question-wrapper {
+    margin-bottom: 20px;
+}
+
+.question-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    animation: slideIn 0.4s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.question-body {
+    padding: 30px 24px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.question-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    line-height: 1.7;
+    margin-bottom: 24px;
+}
+
+.question-number {
+    color: #667eea;
+    font-weight: 700;
+    margin-right: 8px;
+}
+
+.question-type-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.question-type-hint i {
+    font-size: 1rem;
+}
+
+.question-type-hint strong {
+    font-weight: 700;
+}
+
+.question-type-hint.single {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    color: #5a67d8;
+    border-left: 4px solid #667eea;
+}
+
+.question-type-hint.multiple {
+    background: linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(45, 206, 137, 0.1) 100%);
+    color: #0d9488;
+    border-left: 4px solid #11998e;
+}
+
+.question-type-hint.judge {
+    background: linear-gradient(135deg, rgba(240, 147, 251, 0.1) 0%, rgba(245, 87, 108, 0.1) 100%);
+    color: #db2777;
+    border-left: 4px solid #f093fb;
+}
+
+.question-image {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.question-image img {
+    max-height: 250px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* 选项样式 */
+.options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.option-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: #f9fafb;
+    border: 2px solid #e5e7eb;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.option-item:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+    transform: translateX(5px);
+}
+
+.option-item.selected {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.option-item.correct {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.option-item.wrong {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.option-selector {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.option-selector input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.option-item.selected .checkmark {
+    background: #667eea;
+    border-color: #667eea;
+}
+
+.option-item.selected .checkmark::after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 3px;
+    width: 6px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.option-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.option-letter {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 700;
+    border-radius: 8px;
+    font-size: 0.95rem;
+}
+
+.option-text {
+    font-size: 1rem;
+    color: #374151;
+    line-height: 1.5;
+}
+
+.option-text-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+.option-image {
+    max-width: 200px;
+    max-height: 100px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-top: 5px;
+}
+
+/* 多选题方形选择器 */
+.multiple-option .checkmark {
+    border-radius: 6px;
+}
+
+.multiple-option.selected .checkmark::after {
+    left: 7px;
+    top: 3px;
+    width: 6px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.multiple-option .option-letter {
+    background: linear-gradient(135deg, #11998e 0%, #2dce89 100%);
+}
+
+.multiple-option:hover {
+    border-color: #11998e;
+    background: rgba(17, 153, 142, 0.05);
+}
+
+.multiple-option.selected {
+    border-color: #11998e;
+    background: rgba(17, 153, 142, 0.1);
+}
+
+.multiple-option.selected .checkmark {
+    background: #11998e;
+    border-color: #11998e;
+}
+
+/* 判断题特殊样式 */
+.judge-options {
+    flex-direction: row;
+    gap: 20px;
+}
+
+.judge-option {
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    border-radius: 16px;
+    gap: 12px;
+}
+
+.judge-option .option-selector {
+    display: none;
+}
+
+.judge-option .option-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.judge-icon {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 2rem;
+    transition: all 0.3s ease;
+}
+
+.judge-option[data-judge-value="correct"] .judge-icon {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+    color: #10b981;
+    border: 3px solid #10b981;
+}
+
+.judge-option[data-judge-value="wrong"] .judge-icon {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
+    color: #ef4444;
+    border: 3px solid #ef4444;
+}
+
+.judge-text {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #374151;
+}
+
+.judge-option[data-judge-value="correct"]:hover {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+    transform: translateY(-3px);
+}
+
+.judge-option[data-judge-value="wrong"]:hover {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+    transform: translateY(-3px);
+}
+
+.judge-option[data-judge-value="correct"].selected {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+}
+
+.judge-option[data-judge-value="wrong"].selected {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+}
+
+.judge-option[data-judge-value="correct"].selected .judge-icon {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    transform: scale(1.1);
+}
+
+.judge-option[data-judge-value="wrong"].selected .judge-icon {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    transform: scale(1.1);
+}
+
+.judge-option.correct {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.2);
+}
+
+.judge-option.wrong {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.2);
+}
+
+/* 提交按钮 sticky */
+.question-footer {
+    padding: 20px 24px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.btn-submit {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 32px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+}
+
+.btn-submit:active {
+    transform: translateY(0);
+}
+
+.btn-submit i {
+    font-size: 1.3rem;
+}
+
+/* 移动端紧凑信息栏 */
+.mobile-info-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    color: white;
+    gap: 8px;
+}
+
+.mobile-info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.mobile-players-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.mobile-players-toggle:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.mobile-players-panel {
+    margin-bottom: 12px;
+}
+
+.mobile-players-inner {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+/* 平板端侧边栏切换按钮 */
+.sidebar-toggle-btn {
+    display: none;
+    position: fixed;
+    right: 16px;
+    top: 70px;
+    z-index: 1060;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s ease;
+}
+
+.sidebar-toggle-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+/* 平板端遮罩层 */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1040;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.show {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+/* 结果卡片 */
+.result-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    animation: slideIn 0.4s ease;
+}
+
+.result-card.waiting {
+    text-align: center;
+    padding: 60px 40px;
+}
+
+.result-icon {
+    margin-bottom: 24px;
+}
+
+.spinner {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
+.spinner > div {
+    width: 16px;
+    height: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.spinner .bounce1 { animation-delay: -0.32s; }
+.spinner .bounce2 { animation-delay: -0.16s; }
+
+@keyframes bounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+.result-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 10px;
+}
+
+.result-desc {
+    color: #6b7280;
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+}
+
+.progress-bar-animated {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 3px;
+    animation: progress 2s ease-in-out infinite;
+}
+
+@keyframes progress {
+    0% { width: 0%; margin-left: 0%; }
+    50% { width: 50%; margin-left: 25%; }
+    100% { width: 0%; margin-left: 100%; }
+}
+
+/* 结果横幅 - 输赢强调 */
+.result-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.result-banner.streak-banner {
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+}
+
+.result-banner.win-banner {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.result-banner.lose-banner {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+}
+
+.result-banner.rank2-banner {
+    background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+}
+
+.result-banner.rank3-banner {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+}
+
+.result-banner-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+}
+
+.result-banner-content {
+    flex: 1;
+}
+
+.result-banner-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 0 0 2px;
+    color: white;
+}
+
+.result-banner-subtitle {
+    font-size: 0.9rem;
+    opacity: 0.85;
+    color: white;
+}
+
+/* 结果主体区域 */
+.result-body-area {
+    padding: 20px 28px 16px;
+}
+
+/* 单人模式大号统计 */
+.result-big-stat {
+    text-align: center;
+    padding: 16px 0 12px;
+}
+
+.result-big-value {
+    display: block;
+    font-size: 3.5rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+.result-big-label {
+    display: block;
+    font-size: 0.95rem;
+    color: #9ca3af;
+    margin-top: 6px;
+    font-weight: 500;
+}
+
+.result-detail-row {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 12px 0;
+    border-top: 1px solid #f3f4f6;
+}
+
+.result-detail-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.95rem;
+    color: #374151;
+}
+
+.result-detail-item .bi-check-circle-fill { color: #10b981; }
+.result-detail-item .bi-x-circle-fill { color: #ef4444; }
+.result-detail-item .bi-clock-fill { color: #3b82f6; }
+
+/* 对战模式积分高亮 */
+.result-points-highlight {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(249, 115, 22, 0.08) 100%);
+    border-radius: 14px;
+    border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.result-points-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+.result-points-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.result-points-value {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #f59e0b;
+    line-height: 1;
+}
+
+.result-points-label {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+/* 对战排名列表 */
+.result-ranking-compact {
+    margin-bottom: 12px;
+}
+
+.battle-ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.battle-ranking-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    background: #f9fafb;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.battle-ranking-item.winner {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.08) 0%, rgba(255, 193, 7, 0.08) 100%);
+    border-color: #ffd700;
+}
+
+.battle-ranking-item.is-me {
+    border-color: #667eea;
+}
+
+.battle-rank-badge {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-right: 12px;
+    border-radius: 50%;
+    color: white;
+    flex-shrink: 0;
+}
+
+.battle-rank-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.battle-rank-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.battle-rank-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #1f2937;
+}
+
+.battle-rank-correct {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: #10b981;
+    font-weight: 600;
+}
+
+.battle-rank-points {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #667eea;
+    min-width: 50px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* 四人排名 */
+.ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ranking-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f9fafb;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.ranking-item.rank-1 {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.08) 0%, rgba(255, 193, 7, 0.08) 100%);
+    border-color: #ffd700;
+}
+
+.ranking-item.rank-2 {
+    background: linear-gradient(135deg, rgba(192, 192, 192, 0.08) 0%, rgba(169, 169, 169, 0.08) 100%);
+    border-color: #c0c0c0;
+}
+
+.ranking-item.rank-3 {
+    background: linear-gradient(135deg, rgba(205, 127, 50, 0.08) 0%, rgba(184, 115, 51, 0.08) 100%);
+    border-color: #cd7f32;
+}
+
+.ranking-item.rank-4 {
+    border-color: #e5e7eb;
+}
+
+.ranking-item.is-me {
+    border-color: #667eea;
+}
+
+.ranking-badge {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-right: 10px;
+    border-radius: 50%;
+    color: white;
+    flex-shrink: 0;
+}
+
+.ranking-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.ranking-player-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.ranking-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #1f2937;
+}
+
+.ranking-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: #10b981;
+    font-weight: 600;
+}
+
+.ranking-score {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #667eea;
+    min-width: 45px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* 元信息行 */
+.result-meta-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.result-meta-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: #f9fafb;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    color: #374151;
+}
+
+.result-meta-chip i {
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+/* 操作按钮区 */
+.result-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 28px 20px;
+    border-top: 1px solid #f3f4f6;
+    flex-wrap: wrap;
+}
+
+.btn-result {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    text-decoration: none;
+}
+
+.btn-rematch {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 3px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-rematch:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    color: white;
+}
+
+.btn-change-opponent {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 3px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-change-opponent:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    color: white;
+}
+
+.btn-back-lobby {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.btn-back-lobby:hover {
+    background: #e5e7eb;
+    transform: translateY(-2px);
+    color: #374151;
+}
+
+/* 再来一局邀约弹窗 */
+.rematch-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: fadeIn 0.2s ease;
+}
+
+.rematch-modal {
+    background: white;
+    border-radius: 20px;
+    padding: 28px 32px;
+    max-width: 380px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    animation: slideIn 0.3s ease;
+}
+
+.rematch-modal-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    margin: 0 auto 16px;
+}
+
+.rematch-modal-title {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #1f2937;
+    margin: 0 0 8px;
+}
+
+.rematch-modal-desc {
+    font-size: 0.95rem;
+    color: #6b7280;
+    margin: 0 0 16px;
+}
+
+.rematch-modal-countdown {
+    font-size: 0.85rem;
+    color: #ef4444;
+    margin-bottom: 16px;
+    font-weight: 600;
+}
+
+.rematch-modal-countdown span {
+    font-size: 1.1rem;
+}
+
+.rematch-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.btn-rematch-accept, .btn-rematch-decline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.btn-rematch-accept {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.3);
+}
+
+.btn-rematch-accept:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+}
+
+.btn-rematch-decline {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.btn-rematch-decline:hover {
+    background: #e5e7eb;
+}
+
+.rematch-modal-waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+.rematch-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.btn-rematch-cancel {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: none;
+    background: #f3f4f6;
+    color: #6b7280;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+}
+
+.btn-rematch-cancel:hover {
+    background: #e5e7eb;
+    transform: translateY(-1px);
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 动画 */
+@keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+@keyframes pulseUpdate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* ===== 响应式 ===== */
+
+/* 桌面端 (>=992px) - 默认样式已处理 */
+
+/* 平板端 (768px-991px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .quiz-layout {
+        flex-direction: column;
+    }
+
+    .quiz-sidebar {
+        width: 100%;
+        position: static;
+        max-height: none;
+        display: none;
+    }
+
+    .quiz-sidebar.show {
+        display: block;
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 320px;
+        z-index: 1050;
+        overflow-y: auto;
+        background: #f8f9fa;
+        padding: 20px;
+        animation: slideInRight 0.3s ease;
+        box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    }
+
+    .sidebar-toggle-btn {
+        display: flex;
+    }
+
+    .mobile-info-bar {
+        display: none !important;
+    }
+}
+
+/* 图片灯箱 */
+.image-lightbox {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-lightbox.active {
+    display: flex;
+}
+
+.lightbox-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.lightbox-content {
+    position: relative;
+    z-index: 1;
+    max-width: 90vw;
+    max-height: 90vh;
+    animation: zoomIn 0.25s ease;
+}
+
+@keyframes zoomIn {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.lightbox-content img {
+    max-width: 90vw;
+    max-height: 85vh;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    object-fit: contain;
+}
+
+.lightbox-close {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.lightbox-close:hover {
+    background: rgba(255,255,255,0.4);
+    transform: scale(1.1);
+}
+
+/* 断连提示条 */
+.disconnect-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    animation: fadeInDown 0.3s ease;
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.disconnect-bar .bi-wifi-off {
+    font-size: 1.1rem;
+}
+
+.btn-reconnect {
+    padding: 4px 14px;
+    background: white;
+    color: #ef4444;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-reconnect:hover {
+    background: #fef2f2;
+    transform: scale(1.05);
+}
+
+/* 移动端 (<768px) */
+@media (max-width: 767.98px) {
+    .quiz-container {
+        padding: 10px;
+    }
+
+    .quiz-layout {
+        flex-direction: column;
+    }
+
+    .quiz-sidebar {
+        display: none !important;
+    }
+
+    .mobile-info-bar {
+        display: flex;
+    }
+
+    .sidebar-toggle-btn {
+        display: none !important;
+    }
+
+    .question-title {
+        font-size: 1.1rem;
+    }
+
+    .option-item {
+        padding: 12px 14px;
+        gap: 10px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .option-letter {
+        width: 28px;
+        height: 28px;
+        font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+
+    .option-text {
+        font-size: 0.9rem;
+        word-break: break-word;
+    }
+
+    .option-image {
+        max-width: 140px;
+        max-height: 80px;
+    }
+
+    .option-content {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .option-text-wrapper {
+        min-width: 0;
+    }
+
+    .multiple-options .option-item {
+        padding: 12px 14px;
+    }
+
+    .multiple-options .option-text {
+        font-size: 0.9rem;
+        word-break: break-word;
+    }
+}
+
+/* 超小屏幕 (<480px) */
+@media (max-width: 480px) {
+    .mobile-info-item {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 断点续答：从服务端恢复进度
+let resumeData = {{ resume_data | tojson }};
+let currentQuestion = resumeData.current_question_index;
+let totalQuestions = {{ questions|length }};
+let score = resumeData.score;
+let correctCount = resumeData.correct_count;
+let wrongCount = resumeData.wrong_count;
+let startTime = Date.now() - (resumeData.total_time * 1000); // 恢复计时器
+let timerInterval;
+let roomId = {{ room.id }};
+let roomCode = '{{ room.room_code }}';
+let previousRank = {{ current_user.get_rank() }};
+let gameType = '{{ room.game_type }}';
+let socket = null;
+let playersData = {};
+let finishedPlayers = new Set();
+let iFinished = false;
+let gameOver = false;
+let resultsShown = false;
+{% if room.game_type == 'single' %}
+let maxWrongChances = {{ single_wrong_chances }};
+let wrongChancesUsed = {{ player.wrong_chances_used if player else 0 }};
+{% else %}
+let maxWrongChances = 0;
+let wrongChancesUsed = 0;
+{% endif %}
+
+// 题目ID数组（从Jinja2模板注入）
+let questionIds = [
+    {% for question in questions %}
+    {{ question.id }}{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+// 题目元信息数组（从Jinja2模板注入）
+let questionsMeta = [
+    {% for question in questions %}
+    {type: '{{ question.question_type }}', difficulty: {{ question.difficulty }}}{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+// 题型/难度映射
+const typeNames = {single: '单选题', multiple: '多选题', judge: '判断题'};
+const typeIcons = {single: 'check-circle', multiple: 'check-all', judge: 'patch-check'};
+const difficultyNames = {1: '简单', 2: '中等', 3: '困难', 4: '极难'};
+
+function initSocket() {
+    socket = io({
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 10000
+    });
+    
+    socket.on('connect', function() {
+        // 隐藏断连提示
+        const bar = document.getElementById('disconnect-bar');
+        if (bar) bar.style.display = 'none';
+        
+        socket.emit('join_game', {
+            room_code: roomCode,
+            user_id: {{ current_user.id }}
+        });
+    });
+    
+    socket.on('disconnect', function(reason) {
+        // 显示断连提示
+        const bar = document.getElementById('disconnect-bar');
+        const text = document.getElementById('disconnect-text');
+        if (bar && text) {
+            text.textContent = '连接已断开';
+            bar.style.display = 'flex';
+        }
+    });
+    
+    socket.on('connect_error', function(error) {
+        const bar = document.getElementById('disconnect-bar');
+        const text = document.getElementById('disconnect-text');
+        if (bar && text) {
+            text.textContent = '连接失败，请检查网络';
+            bar.style.display = 'flex';
+        }
+    });
+    
+    socket.on('player_joined', function(data) {
+        if (data.players) {
+            data.players.forEach(function(p) {
+                if (p.user_id !== {{ current_user.id }}) {
+                    playersData[p.user_id] = {
+                        name: p.nickname || p.username,
+                        score: p.score || 0,
+                        correct: 0,
+                        wrong: 0,
+                        currentQuestion: 0,
+                        finished: false
+                    };
+                }
+            });
+            updatePlayersDisplay();
+        }
+    });
+    
+    socket.on('player_answered', function(data) {
+        if (data.user_id !== {{ current_user.id }}) {
+            if (!playersData[data.user_id]) {
+                playersData[data.user_id] = {
+                    name: data.username || '对手',
+                    score: 0,
+                    correct: 0,
+                    wrong: 0,
+                    currentQuestion: 0,
+                    finished: false
+                };
+            }
+            updatePlayerProgress(data);
+        }
+    });
+    
+    socket.on('player_finished_notification', function(data) {
+        if (data.user_id !== {{ current_user.id }}) {
+            finishedPlayers.add(data.user_id);
+            if (playersData[data.user_id]) {
+                playersData[data.user_id].finished = true;
+            }
+        }
+    });
+    
+    socket.on('game_results_ready', function(data) {
+        showResults();
+    });
+    
+    // ===== 再来一局邀约事件 =====
+    socket.on('rematch_invitation', function(data) {
+        // 收到邀约（非发起者）
+        if (data.requester_id !== {{ current_user.id }}) {
+            showRematchInvitation(data);
+        }
+    });
+    
+    socket.on('rematch_waiting', function(data) {
+        // 发起者收到确认：邀约已发出
+        showRematchWaiting(data);
+    });
+    
+    socket.on('rematch_status_update', function(data) {
+        // 有人同意了，更新等待文本
+        const waitingText = document.getElementById('rematch-waiting-text');
+        if (waitingText) {
+            waitingText.textContent = '已同意 ' + data.accepted_count + '/' + data.total_count + '，等待其他玩家...';
+        }
+    });
+    
+    socket.on('rematch_declined', function(data) {
+        // 有人拒绝了
+        hideRematchModal();
+        alert(data.decliner_name + ' 拒绝了再来一局');
+    });
+    
+    socket.on('rematch_cancelled', function(data) {
+        // 发起人取消了
+        hideRematchModal();
+        alert(data.message);
+    });
+    
+    socket.on('rematch_ready', function(data) {
+        // 所有人同意，跳转到新房间
+        hideRematchModal();
+        window.location.href = '/game/room/' + data.new_room_code;
+    });
+    
+    socket.on('rematch_error', function(data) {
+        hideRematchModal();
+        if (data.message) alert(data.message);
+    });
+}
+
+function updatePlayersDisplay() {
+    const playerIds = Object.keys(playersData);
+    let index = 1;
+    playerIds.forEach(function(userId) {
+        const player = playersData[userId];
+        // 更新侧边栏
+        const sidebarLabel = document.getElementById('sidebar-player-' + index + '-label');
+        if (sidebarLabel && player) {
+            sidebarLabel.textContent = player.name;
+        }
+        index++;
+    });
+}
+
+function updatePlayerProgress(data) {
+    const playerIds = Object.keys(playersData);
+    let playerIndex = -1;
+    let idx = 1;
+    playerIds.forEach(function(userId) {
+        if (parseInt(userId) === parseInt(data.user_id)) {
+            playerIndex = idx;
+        }
+        idx++;
+    });
+    
+    if (playerIndex === -1) {
+        playerIndex = 1;
+    }
+    
+    if (!playersData[data.user_id]) {
+        playersData[data.user_id] = {
+            name: data.username || '对手',
+            score: 0,
+            correct: 0,
+            wrong: 0,
+            currentQuestion: 0,
+            finished: false
+        };
+    }
+    
+    const player = playersData[data.user_id];
+    player.name = data.username || player.name;
+    player.currentQuestion = data.question_index;
+    
+    if (data.is_correct) {
+        player.correct++;
+    } else {
+        player.wrong++;
+    }
+    
+    if (data.score !== undefined) {
+        player.score = data.score;
+    } else {
+        player.score = player.correct * 10;
+    }
+    
+    const progress = (data.question_index / totalQuestions) * 100;
+    
+    // 更新侧边栏DOM
+    const sidebarProgressBar = document.getElementById('sidebar-player-' + playerIndex + '-progress-bar');
+    const sidebarProgressText = document.getElementById('sidebar-player-' + playerIndex + '-progress-text');
+    const sidebarCorrectEl = document.getElementById('sidebar-player-' + playerIndex + '-correct');
+    const sidebarWrongEl = document.getElementById('sidebar-player-' + playerIndex + '-wrong');
+    const sidebarLabelEl = document.getElementById('sidebar-player-' + playerIndex + '-label');
+    
+    if (sidebarProgressBar) sidebarProgressBar.style.width = progress + '%';
+    if (sidebarProgressText) sidebarProgressText.textContent = data.question_index + '/' + totalQuestions;
+    if (sidebarCorrectEl) sidebarCorrectEl.textContent = player.correct;
+    if (sidebarWrongEl) sidebarWrongEl.textContent = player.wrong;
+    if (sidebarLabelEl) sidebarLabelEl.textContent = player.name;
+}
+
+function updateMyProgress(completed) {
+    const completedCount = completed !== undefined ? completed : (currentQuestion - 1);
+    
+    if (gameType === 'single') {
+        // 更新进度条
+        const progressPercent = Math.floor((completedCount / totalQuestions) * 100);
+        const progressFill = document.getElementById('sidebar-progress-fill');
+        const progressPercentEl = document.getElementById('sidebar-progress-percent');
+        const currentQEl = document.getElementById('sidebar-current-question');
+        
+        if (progressFill) progressFill.style.width = progressPercent + '%';
+        if (progressPercentEl) progressPercentEl.textContent = progressPercent + '%';
+        if (currentQEl) currentQEl.textContent = currentQuestion;
+        
+        // 更新侧边栏
+        const sidebarStreak = document.getElementById('sidebar-streak-number');
+        if (sidebarStreak) sidebarStreak.textContent = correctCount;
+        // 更新移动端
+        const mobileStreak = document.getElementById('mobile-streak');
+        if (mobileStreak) mobileStreak.textContent = correctCount;
+    } else {
+        // 更新侧边栏
+        const sidebarCurrentQ = document.getElementById('sidebar-current-question');
+        const sidebarMyCorrect = document.getElementById('sidebar-my-correct');
+        const sidebarMyWrong = document.getElementById('sidebar-my-wrong');
+        
+        if (sidebarCurrentQ) sidebarCurrentQ.textContent = currentQuestion;
+        if (sidebarMyCorrect) sidebarMyCorrect.textContent = correctCount;
+        if (sidebarMyWrong) sidebarMyWrong.textContent = wrongCount;
+        
+        // 更新移动端
+        const mobileProgress = document.getElementById('mobile-progress');
+        const mobileCorrect = document.getElementById('mobile-correct');
+        if (mobileProgress) mobileProgress.textContent = currentQuestion + '/' + totalQuestions;
+        if (mobileCorrect) mobileCorrect.textContent = correctCount;
+    }
+}
+
+function updateWrongChancesDisplay() {
+    if (gameType !== 'single') return;
+    
+    const remainingChances = maxWrongChances - wrongChancesUsed;
+    
+    // 更新侧边栏心形图标
+    for (let i = 1; i <= maxWrongChances; i++) {
+        const heart = document.getElementById('sidebar-heart-' + i);
+        if (heart) {
+            if (i <= wrongChancesUsed) {
+                heart.classList.add('lost');
+            } else {
+                heart.classList.remove('lost');
+            }
+        }
+    }
+    
+    // 更新移动端
+    const mobileChances = document.getElementById('mobile-chances');
+    if (mobileChances) mobileChances.textContent = remainingChances;
+}
+
+function startTimer() {
+    timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const seconds = (elapsed % 60).toString().padStart(2, '0');
+        const timeStr = `${minutes}:${seconds}`;
+        
+        // 更新侧边栏计时器
+        const sidebarTimer = document.getElementById('sidebar-timer');
+        if (sidebarTimer) sidebarTimer.textContent = timeStr;
+        
+        // 更新移动端计时器
+        const mobileTimer = document.getElementById('mobile-timer');
+        if (mobileTimer) mobileTimer.textContent = timeStr;
+    }, 1000);
+}
+
+function selectOption(element, questionIndex) {
+    const input = element.querySelector('input');
+    const isRadio = input.type === 'radio';
+    
+    if (isRadio) {
+        const container = document.getElementById(`options-${questionIndex}`);
+        container.querySelectorAll('.option-item').forEach(item => {
+            item.classList.remove('selected');
+            item.querySelector('input').checked = false;
+        });
+        input.checked = true;
+        element.classList.add('selected');
+    } else {
+        input.checked = !input.checked;
+        element.classList.toggle('selected', input.checked);
+    }
+}
+
+function submitAnswer(questionIndex) {
+    if (gameOver) {
+        return;
+    }
+    
+    const options = document.querySelectorAll(`input[name="answer-${questionIndex}"]:checked`);
+    if (options.length === 0) {
+        alert('请选择答案');
+        return;
+    }
+    
+    const answer = Array.from(options).map(o => o.value).join(',');
+    const questionId = document.getElementById(`question-id-${questionIndex}`).value;
+    const elapsed = Date.now() - startTime;
+    
+    console.log('提交答案:', { room_id: roomId, question_id: questionId, answer: answer });
+    
+    fetch('/game/submit-answer', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            room_id: roomId,
+            question_id: questionId,
+            answer: answer,
+            time_spent: elapsed
+        })
+    })
+    .then(response => {
+        console.log('响应状态:', response.status);
+        const contentType = response.headers.get('content-type');
+        
+        if (!contentType || !contentType.includes('application/json')) {
+            return response.text().then(html => {
+                console.error('收到非JSON响应:', html.substring(0, 200));
+                if (response.status === 401 || html.includes('登录')) {
+                    throw new Error('请先登录');
+                } else if (response.status === 404) {
+                    throw new Error('提交接口不存在');
+                } else {
+                    throw new Error('服务器返回非JSON响应');
+                }
+            });
+        }
+        
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.error || `HTTP error: ${response.status}`);
+            }).catch(jsonErr => {
+                throw new Error(`HTTP ${response.status}: 请求失败`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('提交结果:', data);
+        
+        if (data.error) {
+            if (data.game_over) {
+                gameOver = true;
+                finishGame();
+            }
+            alert(data.error);
+            return;
+        }
+        
+        // 如果是已答题（网络异常后重新提交），直接跳转到下一题
+        if (data.already_answered) {
+            console.log('该题目已作答，跳转到下一题');
+            showResult(questionIndex, data.is_correct, data.correct_answer);
+            setTimeout(() => {
+                if (questionIndex < totalQuestions) {
+                    nextQuestion(questionIndex);
+                } else {
+                    finishGame();
+                }
+            }, 500);
+            return;
+        }
+        
+        showResult(questionIndex, data.is_correct, data.correct_answer);
+        
+        if (data.is_correct) {
+            score += 10;
+            correctCount++;
+        } else {
+            wrongCount++;
+        }
+        
+        if (gameType === 'single') {
+            if (data.wrong_chances_used !== undefined) {
+                wrongChancesUsed = data.wrong_chances_used;
+            }
+            updateWrongChancesDisplay();
+        }
+        
+        updateMyProgress(questionIndex);
+        
+        if (socket && gameType !== 'single') {
+            socket.emit('submit_answer', {
+                room_code: roomCode,
+                user_id: {{ current_user.id }},
+                username: '{{ current_user.nickname or current_user.username }}',
+                question_index: questionIndex,
+                is_correct: data.is_correct,
+                score: score
+            });
+        }
+        
+        setTimeout(() => {
+            if (data.game_over) {
+                gameOver = true;
+                finishGame();
+            } else if (questionIndex < totalQuestions) {
+                nextQuestion(questionIndex);
+            } else {
+                finishGame();
+            }
+        }, 1500);
+    })
+    .catch(error => {
+        console.error('提交答案失败:', error);
+        alert('提交答案失败: ' + error.message);
+        const submitBtn = document.querySelector(`#question-${questionIndex} .btn-submit`);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+        }
+    });
+}
+
+function showResult(questionIndex, isCorrect, correctAnswer) {
+    const options = document.querySelectorAll(`#options-${questionIndex} .option-item`);
+    options.forEach(option => {
+        const optionKey = option.dataset.option;
+        const input = option.querySelector('input');
+        
+        if (correctAnswer.includes(optionKey)) {
+            option.classList.add('correct');
+            option.classList.remove('selected');
+        }
+        
+        if (input.checked && !isCorrect) {
+            option.classList.add('wrong');
+            option.classList.remove('selected');
+        }
+        
+        input.disabled = true;
+        option.style.pointerEvents = 'none';
+    });
+}
+
+function nextQuestion(currentIndex) {
+    document.getElementById(`question-${currentIndex}`).style.display = 'none';
+    document.getElementById(`question-${currentIndex + 1}`).style.display = 'block';
+    currentQuestion = currentIndex + 1;
+    
+    // 更新侧边栏题型/难度标签
+    updateSidebarMeta();
+}
+
+function updateSidebarMeta() {
+    const meta = questionsMeta[currentQuestion - 1];
+    if (!meta) return;
+    
+    const typeBadge = document.getElementById('sidebar-type-badge');
+    const diffBadge = document.getElementById('sidebar-difficulty-badge');
+    
+    if (typeBadge) {
+        typeBadge.className = 'badge type-badge ' + meta.type;
+        typeBadge.innerHTML = `<i class="bi bi-${typeIcons[meta.type]}"></i> ${typeNames[meta.type]}`;
+        typeBadge.style.animation = 'none';
+        typeBadge.offsetHeight; // 触发重排
+        typeBadge.style.animation = 'fadeIn 0.3s ease';
+    }
+    
+    if (diffBadge) {
+        const diffLevel = Math.min(meta.difficulty, 4);
+        diffBadge.className = 'badge difficulty-badge level-' + diffLevel;
+        diffBadge.innerHTML = `<i class="bi bi-lightning-fill"></i> ${difficultyNames[diffLevel] || '困难'}`;
+        diffBadge.style.animation = 'none';
+        diffBadge.offsetHeight;
+        diffBadge.style.animation = 'fadeIn 0.3s ease';
+    }
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('quiz-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const isOpen = sidebar.classList.contains('show');
+
+    if (isOpen) {
+        sidebar.classList.remove('show');
+        overlay.classList.remove('show');
+    } else {
+        sidebar.classList.add('show');
+        overlay.classList.add('show');
+    }
+}
+
+function toggleMobilePlayers() {
+    const panel = document.getElementById('mobile-players-panel');
+    if (panel) {
+        // 使用 Bootstrap Collapse API
+        const bsCollapse = bootstrap.Collapse.getOrCreateInstance(panel);
+        bsCollapse.toggle();
+        
+        // 更新移动端对手信息
+        updateMobilePlayersContent();
+    }
+}
+
+function updateMobilePlayersContent() {
+    const container = document.getElementById('mobile-players-inner');
+    if (!container) return;
+    
+    const playerIds = Object.keys(playersData);
+    let html = '';
+    playerIds.forEach(function(userId, index) {
+        const player = playersData[userId];
+        const progress = (player.currentQuestion / totalQuestions) * 100;
+        html += `
+            <div style="padding:8px 0; ${index < playerIds.length - 1 ? 'border-bottom:1px solid #f3f4f6;' : ''}">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    <span style="font-weight:600;font-size:0.9rem;color:#374151;">${player.name}</span>
+                    <span style="color:#10b981;font-size:0.8rem;font-weight:600;">✓ ${player.correct}</span>
+                    <span style="color:#ef4444;font-size:0.8rem;font-weight:600;">✗ ${player.wrong}</span>
+                </div>
+                <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:${progress}%;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:3px;transition:width 0.5s ease;"></div>
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html || '<div style="text-align:center;color:#9ca3af;padding:12px;">暂无对手信息</div>';
+}
+
+function finishGame() {
+    clearInterval(timerInterval);
+    iFinished = true;
+
+    updateMyProgress(totalQuestions);
+
+    if (socket && gameType !== 'single') {
+        socket.emit('player_finished', {
+            room_code: roomCode,
+            user_id: {{ current_user.id }}
+        });
+    }
+
+    document.getElementById('question-container').style.display = 'none';
+    // 隐藏侧边栏及移动端信息栏
+    const sidebar = document.getElementById('quiz-sidebar');
+    if (sidebar) sidebar.style.display = 'none';
+    const mobileBar = document.querySelector('.mobile-info-bar');
+    if (mobileBar) mobileBar.style.display = 'none';
+    const sidebarBtn = document.querySelector('.sidebar-toggle-btn');
+    if (sidebarBtn) sidebarBtn.style.display = 'none';
+    const overlay = document.getElementById('sidebar-overlay');
+    if (overlay) overlay.style.display = 'none';
+
+    if (gameType === 'single') {
+        showResults();
+    } else {
+        document.getElementById('waiting-container').style.display = 'block';
+        const totalPlayers = gameType === 'four' ? 4 : 2;
+        const waitingText = document.getElementById('waiting-text');
+        if (waitingText) {
+            const remaining = totalPlayers - 1 - finishedPlayers.size;
+            if (remaining > 0) {
+                waitingText.textContent = `等待其他 ${remaining} 位玩家完成答题...`;
+            } else {
+                waitingText.textContent = '正在计算结果...';
+            }
+        }
+    }
+}
+
+function showResults() {
+    if (resultsShown) return; // 防止重复调用（成功获取结果后）
+    
+    document.getElementById('waiting-container').style.display = 'none';
+    document.getElementById('result-container').style.display = 'block';
+    
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+    const seconds = (elapsed % 60).toString().padStart(2, '0');
+    const timeStr = `${minutes}:${seconds}`;
+    
+    fetch(`/game/finish-game/${roomCode}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('[DEBUG] finish-game API 返回数据:', data);
+
+        if (gameType === 'single') {
+            resultsShown = true;
+            document.getElementById('my-final-correct').textContent = correctCount;
+            document.getElementById('my-final-wrong').textContent = wrongCount;
+            document.getElementById('final-streak').textContent = correctCount;
+            document.getElementById('final-time').textContent = timeStr;
+            document.getElementById('final-time-display').textContent = '用时 ' + timeStr;
+            document.getElementById('result-title').textContent = '连胜结束';
+        } else if (gameType === 'battle' || gameType === 'four') {
+            // 显示用时
+            const resultTime = document.getElementById('result-time');
+            if (resultTime) resultTime.textContent = timeStr;
+
+            if (data.status === 'waiting') {
+                // 其他玩家还没完成，2秒后重试
+                console.log('[DEBUG] 等待其他玩家完成，2秒后重试');
+                setTimeout(showResults, 2000);
+                return;
+            }
+
+            if (data.results && data.results.length > 0) {
+                resultsShown = true; // 标记结果已成功获取
+                const myResult = data.results.find(r => r.user_id === {{ current_user.id }});
+                if (myResult) {
+                    document.getElementById('points-earned').textContent = '+' + myResult.points_earned;
+
+                    // 设置输赢横幅
+                    const banner = document.getElementById('result-banner');
+                    const bannerIcon = document.getElementById('result-banner-icon');
+                    const bannerSub = document.getElementById('result-banner-sub');
+                    
+                    if (myResult.rank === 1) {
+                        banner.className = 'result-banner win-banner';
+                        bannerIcon.innerHTML = '<i class="bi bi-trophy-fill"></i>';
+                        document.getElementById('result-title').textContent = '胜利!';
+                        if (bannerSub) bannerSub.textContent = '击败了所有对手';
+                    } else if (gameType === 'four') {
+                        // 四人模式显示排名
+                        const rankLabels = ['', '冠军', '亚军', '季军', '第四名'];
+                        const rankIcons = ['', 'bi-trophy-fill', 'bi-medal-fill', 'bi-award-fill', 'bi-emoji-neutral-fill'];
+                        const rankBanners = ['', 'win-banner', 'rank2-banner', 'rank3-banner', 'lose-banner'];
+                        banner.className = 'result-banner ' + (rankBanners[myResult.rank] || 'lose-banner');
+                        bannerIcon.innerHTML = '<i class="bi ' + (rankIcons[myResult.rank] || 'bi-emoji-neutral-fill') + '"></i>';
+                        document.getElementById('result-title').textContent = rankLabels[myResult.rank] || ('第' + myResult.rank + '名');
+                        if (bannerSub) bannerSub.textContent = '排名第 ' + myResult.rank + ' / ' + data.results.length;
+                    } else {
+                        banner.className = 'result-banner lose-banner';
+                        bannerIcon.innerHTML = '<i class="bi bi-emoji-neutral-fill"></i>';
+                        document.getElementById('result-title').textContent = '惜败';
+                        if (bannerSub) bannerSub.textContent = '下次再接再厉';
+                    }
+                }
+
+                if (gameType === 'battle') {
+                    displayBattleRanking(data.results, {{ current_user.id }});
+                } else if (gameType === 'four') {
+                    displayFourPlayerRanking(data.results, {{ current_user.id }});
+                }
+
+                fetch('/points/api/rank-info')
+                    .then(r => r.json())
+                    .then(rankData => {
+                        const newRank = rankData.current_rank;
+                        const rankDiff = previousRank - newRank;
+                        const rankEl = document.getElementById('rank-change');
+                        if (rankDiff > 0) {
+                            rankEl.textContent = '↑' + rankDiff;
+                            rankEl.style.color = '#10b981';
+                        } else if (rankDiff < 0) {
+                            rankEl.textContent = '↓' + Math.abs(rankDiff);
+                            rankEl.style.color = '#ef4444';
+                        } else {
+                            rankEl.textContent = '不变';
+                        }
+                    });
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        
+        if (gameType === 'single') {
+            document.getElementById('my-final-correct').textContent = correctCount;
+            document.getElementById('final-streak').textContent = correctCount;
+            document.getElementById('final-time').textContent = timeStr;
+            document.getElementById('result-title').textContent = '连胜结束';
+        } else {
+            // 多人模式出错，2秒后重试
+            document.getElementById('result-title').textContent = '加载中...';
+            document.getElementById('points-earned').textContent = '...';
+            setTimeout(showResults, 2000);
+        }
+    });
+}
+
+function displayBattleRanking(results, currentUserId) {
+    const rankingList = document.getElementById('battle-ranking-list');
+    if (!rankingList) return;
+    
+    rankingList.innerHTML = '';
+    results.sort((a, b) => a.rank - b.rank);
+    
+    const rankEmojis = ['🥇', '🥈'];
+    const rankColors = ['#FFD700', '#C0C0C0'];
+    
+    results.forEach((result, index) => {
+        const rank = result.rank;
+        const isMe = result.user_id === currentUserId;
+        const isWinner = rank === 1;
+        
+        const rankingItem = document.createElement('div');
+        rankingItem.className = `battle-ranking-item ${isWinner ? 'winner' : ''} ${isMe ? 'is-me' : ''}`;
+        rankingItem.innerHTML = `
+            <div class="battle-rank-badge" style="background: ${rankColors[index] || '#CD7F32'}">
+                ${rankEmojis[index] || rank}
+            </div>
+            <img src="${isMe ? '{{ current_user.get_avatar_url() }}' : '{{ url_for('static', filename='avatars/default.png') }}'}" 
+                 alt="${isMe ? '我' : (result.nickname || result.username)}" 
+                 class="battle-rank-avatar">
+            <div class="battle-rank-info">
+                <span class="battle-rank-name">${isMe ? '我' : (result.nickname || result.username)}</span>
+                <span class="battle-rank-correct">
+                    <i class="bi bi-check-circle-fill"></i> ${result.correct_count}/${totalQuestions}
+                    <span style="color:#6b7280;margin-left:6px;">${((result.correct_count / totalQuestions) * 100).toFixed(0)}%</span>
+                </span>
+            </div>
+            <div class="battle-rank-points">+${result.points_earned}</div>
+        `;
+        
+        rankingList.appendChild(rankingItem);
+    });
+}
+
+function displayFourPlayerRanking(results, currentUserId) {
+    const rankingList = document.getElementById('ranking-list');
+    if (!rankingList) return;
+    
+    rankingList.innerHTML = '';
+    results.sort((a, b) => a.rank - b.rank);
+    
+    const rankEmojis = ['🥇', '🥈', '🥉', '4'];
+    const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32', '#9CA3AF'];
+    
+    results.forEach((result, index) => {
+        const rank = result.rank;
+        const isMe = result.user_id === currentUserId;
+        
+        const rankingItem = document.createElement('div');
+        rankingItem.className = `ranking-item rank-${rank}${isMe ? ' is-me' : ''}`;
+        rankingItem.innerHTML = `
+            <div class="ranking-badge" style="background: ${rankColors[index]}">${rankEmojis[index]}</div>
+            <img src="${isMe ? '{{ current_user.get_avatar_url() }}' : '{{ url_for('static', filename='avatars/default.png') }}'}" 
+                 alt="${isMe ? '我' : (result.nickname || result.username)}" 
+                 class="ranking-avatar">
+            <div class="ranking-player-info">
+                <span class="ranking-name">${isMe ? '我' : (result.nickname || result.username)}</span>
+                <span class="ranking-stat correct">
+                    <i class="bi bi-check-circle-fill"></i> ${result.correct_count}/${totalQuestions}
+                    <span style="color:#6b7280;margin-left:4px;">${((result.correct_count / totalQuestions) * 100).toFixed(0)}%</span>
+                </span>
+            </div>
+            <div class="ranking-score">+${result.points_earned}</div>
+        `;
+
+        rankingList.appendChild(rankingItem);
+    });
+}
+
+let rematchCountdownTimer = null;
+let rematchCountdownValue = 15;
+
+function rematchGame() {
+    if (gameType === 'single') {
+        // 单人模式直接通过 HTTP 请求
+        const btn = document.querySelector('.btn-rematch');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i><span>匹配中...</span>';
+        }
+        fetch(`/game/rematch/${roomCode}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => {
+                    try { return JSON.parse(text); } 
+                    catch(e) { return {error: '请求失败 (' + response.status + ')'}; }
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i><span>再来一局</span>'; }
+                return;
+            }
+            window.location.href = '/game/play/' + data.room_code;
+        })
+        .catch(error => {
+            console.error('Rematch error:', error);
+            alert('再来一局失败，请稍后重试');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i><span>再来一局</span>'; }
+        });
+        return;
+    }
+    
+    // 对战模式：通过 Socket.IO 发起邀约
+    if (!socket) {
+        alert('连接已断开，请刷新页面');
+        return;
+    }
+    
+    const btn = document.querySelector('.btn-rematch');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i><span>邀约中...</span>';
+    }
+    
+    socket.emit('rematch_request', { room_code: roomCode });
+}
+
+function showRematchInvitation(data) {
+    // 显示邀约弹窗（被邀请方）
+    const overlay = document.getElementById('rematch-overlay');
+    const title = document.getElementById('rematch-modal-title');
+    const desc = document.getElementById('rematch-modal-desc');
+    const actions = document.getElementById('rematch-modal-actions');
+    const waiting = document.getElementById('rematch-modal-waiting');
+    const countdown = document.getElementById('rematch-modal-countdown');
+    
+    title.textContent = '再来一局';
+    desc.textContent = data.requester_name + ' 邀请你再来一局';
+    actions.style.display = 'flex';
+    waiting.style.display = 'none';
+    countdown.style.display = 'block';
+    overlay.style.display = 'flex';
+    
+    // 启动15秒倒计时
+    rematchCountdownValue = 15;
+    document.getElementById('rematch-countdown-num').textContent = rematchCountdownValue;
+    rematchCountdownTimer = setInterval(() => {
+        rematchCountdownValue--;
+        document.getElementById('rematch-countdown-num').textContent = rematchCountdownValue;
+        if (rematchCountdownValue <= 0) {
+            clearInterval(rematchCountdownTimer);
+            declineRematch(); // 超时自动拒绝
+        }
+    }, 1000);
+}
+
+function showRematchWaiting(data) {
+    // 显示等待弹窗（发起者）
+    const overlay = document.getElementById('rematch-overlay');
+    const title = document.getElementById('rematch-modal-title');
+    const desc = document.getElementById('rematch-modal-desc');
+    const actions = document.getElementById('rematch-modal-actions');
+    const waiting = document.getElementById('rematch-modal-waiting');
+    const countdown = document.getElementById('rematch-modal-countdown');
+    
+    title.textContent = '再来一局';
+    desc.textContent = '邀约已发出，等待其他玩家同意...';
+    actions.style.display = 'none';
+    waiting.style.display = 'flex';
+    countdown.style.display = 'none';
+    document.getElementById('rematch-waiting-text').textContent = 
+        '已同意 1/' + data.total_count + '，等待其他玩家...';
+    overlay.style.display = 'flex';
+    
+    // 发起者也设置15秒超时，超时后自动关闭
+    rematchCountdownValue = 15;
+    rematchCountdownTimer = setInterval(() => {
+        rematchCountdownValue--;
+        if (rematchCountdownValue <= 0) {
+            clearInterval(rematchCountdownTimer);
+            rematchCountdownTimer = null;
+            // 超时后自动关闭并提示
+            hideRematchModal();
+            alert('其他玩家未响应，再来一局已取消');
+        }
+    }, 1000);
+}
+
+function acceptRematch() {
+    if (rematchCountdownTimer) { clearInterval(rematchCountdownTimer); rematchCountdownTimer = null; }
+    if (socket) socket.emit('rematch_accept', { room_code: roomCode });
+    
+    // 切换到等待状态
+    const actions = document.getElementById('rematch-modal-actions');
+    const waiting = document.getElementById('rematch-modal-waiting');
+    const countdown = document.getElementById('rematch-modal-countdown');
+    actions.style.display = 'none';
+    waiting.style.display = 'flex';
+    countdown.style.display = 'none';
+    document.getElementById('rematch-waiting-text').textContent = '已同意，等待其他玩家...';
+}
+
+function declineRematch() {
+    if (rematchCountdownTimer) { clearInterval(rematchCountdownTimer); rematchCountdownTimer = null; }
+    if (socket) socket.emit('rematch_decline', { room_code: roomCode });
+    hideRematchModal();
+}
+
+function cancelRematch() {
+    if (socket) socket.emit('rematch_cancel', { room_code: roomCode });
+    hideRematchModal();
+}
+
+function hideRematchModal() {
+    if (rematchCountdownTimer) { clearInterval(rematchCountdownTimer); rematchCountdownTimer = null; }
+    document.getElementById('rematch-overlay').style.display = 'none';
+    // 恢复按钮状态
+    const btn = document.querySelector('.btn-rematch');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i><span>再来一局</span>'; }
+}
+
+function changeOpponent() {
+    const btn = document.querySelector('.btn-change-opponent');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-people"></i><span>匹配中...</span>';
+    }
+    
+    fetch(`/game/change-opponent/${roomCode}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => {
+                try { return JSON.parse(text); } 
+                catch(e) { return {error: '请求失败 (' + response.status + ')'}; }
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-people"></i><span>换个对手</span>';
+            }
+            return;
+        }
+        window.location.href = '/game/room/' + data.room_code;
+    })
+    .catch(error => {
+        console.error('Change opponent error:', error);
+        alert('换对手失败，请稍后重试');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-people"></i><span>换个对手</span>';
+        }
+    });
+}
+
+function showImageLightbox(src) {
+    const lightbox = document.getElementById('image-lightbox');
+    const img = document.getElementById('lightbox-img');
+    if (lightbox && img) {
+        img.src = src;
+        lightbox.classList.add('active');
+    }
+}
+
+function hideImageLightbox() {
+    const lightbox = document.getElementById('image-lightbox');
+    if (lightbox) {
+        lightbox.classList.remove('active');
+    }
+}
+
+// ESC 键关闭灯箱
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        hideImageLightbox();
+    }
+});
+
+function reconnectGame() {
+    const btn = document.getElementById('btn-reconnect');
+    const text = document.getElementById('disconnect-text');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '连接中...';
+    }
+    if (text) text.textContent = '正在重新连接...';
+    
+    // 如果 socket 还存在，尝试手动重连
+    if (socket && !socket.connected) {
+        socket.connect();
+        // 3秒后检查是否连上
+        setTimeout(function() {
+            if (socket.connected) {
+                if (btn) { btn.disabled = false; btn.textContent = '重新连接'; }
+            } else {
+                if (text) text.textContent = '连接失败，请刷新页面';
+                if (btn) { btn.disabled = false; btn.textContent = '刷新页面'; btn.onclick = function() { window.location.reload(); }; }
+            }
+        }, 3000);
+    } else {
+        // socket 不存在或已连接，直接刷新页面
+        window.location.reload();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (gameType !== 'single') {
+        initSocket();
+    }
+    startTimer();
+    updateMyProgress();
+    
+    // 断点续答：如果已完成所有题目或已淘汰，直接触发完成状态
+    if (currentQuestion > totalQuestions || (gameType === 'single' && {{ 'true' if player.game_over else 'false' }})) {
+        iFinished = true;
+        gameOver = true;
+        correctCount = resumeData.correct_count;
+        wrongCount = resumeData.wrong_count;
+        finishGame();
+        return;
+    }
+    
+    // 断点续答：恢复已答题目的状态
+    if (resumeData.current_question_index > 1) {
+        // 从服务端获取已答题目信息
+        fetch(`/game/api/answered-questions/${roomCode}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.answers && data.answers.length > 0) {
+                    data.answers.forEach(function(ans) {
+                        const questionCard = document.getElementById('question-' + ans.question_index);
+                        if (questionCard) {
+                            // 标记选项为已答状态
+                            const options = questionCard.querySelectorAll('.option-item');
+                            options.forEach(function(opt) {
+                                const optKey = opt.getAttribute('data-option');
+                                opt.style.pointerEvents = 'none';
+                                opt.style.opacity = '0.7';
+                                if (optKey === ans.user_answer) {
+                                    opt.classList.add(ans.is_correct ? 'correct' : 'wrong');
+                                }
+                                if (optKey === ans.correct_answer && !ans.is_correct) {
+                                    opt.classList.add('correct');
+                                }
+                            });
+                        }
+                    });
+                }
+            })
+            .catch(err => console.error('恢复答题状态失败:', err));
+    }
+});
+</script>
+{% endblock %}

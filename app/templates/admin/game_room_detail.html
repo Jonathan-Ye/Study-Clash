@@ -1,0 +1,148 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}房间详情 - {{ room.room_code }}{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="bi bi-door-open"></i> 房间详情: <code>{{ room.room_code }}</code></h4>
+                    <a href="{{ url_for('admin.games') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> 返回列表
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">游戏类型</small>
+                                    <h5>
+                                        {% if room.game_type == 'single' %}
+                                            <span class="badge bg-info">单人挑战</span>
+                                        {% elif room.game_type == 'battle' %}
+                                            <span class="badge bg-primary">双人对战</span>
+                                        {% elif room.game_type == 'four' %}
+                                            <span class="badge bg-success">四人挑战</span>
+                                        {% endif %}
+                                    </h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">状态</small>
+                                    <h5>
+                                        {% if room.status == 'waiting' %}
+                                            <span class="badge bg-warning">等待中</span>
+                                        {% elif room.status == 'playing' %}
+                                            <span class="badge bg-primary">进行中</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">已结束</span>
+                                        {% endif %}
+                                    </h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">学科</small>
+                                    <h5>{{ room.subject.name if room.subject else '综合' }}</h5>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <small class="text-muted">题目数</small>
+                                    <h5>{{ room.question_count }} 题</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <small class="text-muted">创建时间:</small> {{ room.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </div>
+                        {% if room.started_at %}
+                        <div class="col-md-6">
+                            <small class="text-muted">开始时间:</small> {{ room.started_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </div>
+                        {% endif %}
+                        {% if room.ended_at %}
+                        <div class="col-md-6">
+                            <small class="text-muted">结束时间:</small> {{ room.ended_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <hr>
+
+                    <h5><i class="bi bi-people"></i> 玩家信息 ({{ player_details|length }}人)</h5>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>排名</th>
+                                    <th>玩家</th>
+                                    <th>得分</th>
+                                    <th>正确/错误</th>
+                                    <th>用时(秒)</th>
+                                    <th>获得积分</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in player_details %}
+                                <tr>
+                                    <td>
+                                        {% if item.record and item.record.rank == 1 %}
+                                            <span class="badge bg-warning">🥇 第1名</span>
+                                        {% elif item.record and item.record.rank == 2 %}
+                                            <span class="badge bg-secondary">🥈 第2名</span>
+                                        {% elif item.record and item.record.rank == 3 %}
+                                            <span class="badge bg-warning text-dark">🥉 第3名</span>
+                                        {% else %}
+                                            第{{ item.record.rank if item.record else '-' }}名
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('admin.game_user_detail', user_id=item.user.id) }}" 
+                                           class="text-decoration-none">
+                                            <img src="{{ item.user.get_avatar_url() }}" 
+                                                 class="rounded-circle me-2" 
+                                                 style="width:32px;height:32px;object-fit:cover;">
+                                            {{ item.user.nickname or item.user.username }}
+                                        </a>
+                                    </td>
+                                    <td><strong>{{ item.player.score }}</strong></td>
+                                    <td>
+                                        <span class="text-success">{{ item.player.correct_count }}</span> / 
+                                        <span class="text-danger">{{ item.player.wrong_count }}</span>
+                                    </td>
+                                    <td>{{ item.player.total_time }}s</td>
+                                    <td class="text-success fw-bold">
+                                        +{{ item.record.points_earned if item.record else 0 }}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('admin.game_user_detail', user_id=item.user.id) }}"
+                                           class="btn btn-sm btn-outline-info">
+                                            <i class="bi bi-person-lines-fill"></i> 查看记录
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

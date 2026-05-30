@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}控制台 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- 回到对局提示 -->
+        <div id="active-game-alert" class="mb-4" style="display:none;">
+            <div class="alert alert-warning d-flex align-items-center" style="border-radius: 12px; border: 2px solid #f59e0b;">
+                <i class="bi bi-exclamation-triangle-fill me-2" style="font-size: 1.2rem;"></i>
+                <span class="flex-grow-1">你有一局游戏正在进行中<span class="ms-2 text-muted" style="font-size: 0.85rem;">(<span id="game-timeout-countdown" class="fw-bold">--</span>后消失)</span></span>
+                <a id="active-game-link" href="#" class="btn btn-warning btn-sm ms-2" style="border-radius: 8px;">
+                    <i class="bi bi-box-arrow-in-right"></i> 回到对局
+                </a>
+            </div>
+        </div>
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> 快速开始</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <a href="{{ url_for('game.single') }}" class="text-decoration-none">
+                            <div class="card bg-primary text-white h-100">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-person-fill fs-1"></i>
+                                    <h5 class="mt-2">单人挑战</h5>
+                                    <small>独自答题，提升自我</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('game.battle') }}" class="text-decoration-none">
+                            <div class="card bg-success text-white h-100">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-people-fill fs-1"></i>
+                                    <h5 class="mt-2">双人对战</h5>
+                                    <small>1v1对战，一决高下</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('game.four') }}" class="text-decoration-none">
+                            <div class="card bg-warning text-white h-100">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-trophy-fill fs-1"></i>
+                                    <h5 class="mt-2">四人挑战</h5>
+                                    <small>群雄逐鹿，争夺冠军</small>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-book"></i> 学科选择</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% for subject in subjects %}
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="bi {{ subject.icon or 'bi-book' }} text-primary"></i>
+                                    {{ subject.name }}
+                                </h6>
+                                <p class="card-text small text-muted">
+                                    {{ subject.questions.count() }} 道题目
+                                </p>
+                                <a href="{{ url_for('game.single', subject_id=subject.id) }}" 
+                                   class="btn btn-sm btn-outline-primary">开始答题</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-person-circle"></i> 个人信息</h5>
+            </div>
+            <div class="card-body text-center">
+                <img src="{{ current_user.get_avatar_url() }}"
+                     class="rounded-circle mb-3" width="80" height="80" alt="avatar">
+                <h5>{{ current_user.nickname or current_user.username }}</h5>
+                
+                {% if current_user.current_tier %}
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; margin-bottom: 8px;">
+                    {% if current_user.current_tier.icon %}
+                    <img src="/static/images/tiers/{{ current_user.current_tier.icon }}" 
+                         alt="{{ current_user.current_tier.display_name }}"
+                         style="width: 22px; height: 22px;">
+                    {% endif %}
+                    <span style="color: {{ current_user.current_tier.color }}; font-weight: 600;">{{ current_user.current_tier.display_name }}</span>
+                </div>
+                {% else %}
+                <p class="text-muted">未定段</p>
+                {% endif %}
+                
+                <div class="d-flex justify-content-around mt-3">
+                    <div>
+                        <h4 class="text-primary mb-0">{{ current_user.total_points }}</h4>
+                        <small class="text-muted">总积分</small>
+                    </div>
+                    <div>
+                        <h4 class="text-success mb-0">{{ current_user.streak_days }}</h4>
+                        <small class="text-muted">连续天数</small>
+                    </div>
+                    <div>
+                        <h4 class="text-warning mb-0">{{ current_user.get_rank() }}</h4>
+                        <small class="text-muted">排名</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-calendar-check"></i> 今日统计</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>答题数</span>
+                    <span class="badge bg-primary">{{ today_stats.questions_answered }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>正确数</span>
+                    <span class="badge bg-success">{{ today_stats.correct_count }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>正确率</span>
+                    <span class="badge bg-info">{{ today_stats.accuracy }}%</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>获得积分</span>
+                    <span class="badge bg-warning">{{ today_stats.points_earned }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> 最近游戏</h5>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for game in recent_games %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <span class="badge bg-{{ 'success' if game.game_type == 'single' else 'primary' if game.game_type == 'battle' else 'warning' }}">
+                                {{ '单人' if game.game_type == 'single' else '对战' if game.game_type == 'battle' else '四人' }}
+                            </span>
+                            <span class="ms-2">{{ game.subject.name if game.subject else '综合' }}</span>
+                        </div>
+                        <span class="text-muted small">{{ game.created_at.strftime('%m-%d %H:%M') }}</span>
+                    </div>
+                    <div class="mt-1">
+                        <small class="text-muted">
+                            得分: {{ game.score }} | 正确: {{ game.correct_count }} | 
+                            排名: 第{{ game.rank }}名
+                        </small>
+                    </div>
+                </div>
+                {% else %}
+                <div class="list-group-item text-center text-muted">
+                    暂无游戏记录
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 检查是否有进行中的游戏
+let gameCountdownInterval = null;
+
+fetch('/game/api/active-game')
+    .then(r => r.json())
+    .then(data => {
+        if (data.has_active_game) {
+            const alert = document.getElementById('active-game-alert');
+            const link = document.getElementById('active-game-link');
+            if (alert && link) {
+                link.href = '/game/play/' + data.room_code;
+                alert.style.display = 'block';
+                
+                // 启动倒计时
+                if (data.timeout_minutes && data.started_at) {
+                    startGameCountdown(data.timeout_minutes, data.started_at);
+                }
+            }
+        }
+    })
+    .catch(() => {});
+
+// 倒计时功能
+function startGameCountdown(timeoutMinutes, startedAt) {
+    // 从服务器获取开始时间，计算剩余时间
+    const startTime = new Date(startedAt);
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now - startTime) / 1000);
+    const totalSeconds = timeoutMinutes * 60;
+    let remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+    
+    const countdownElement = document.getElementById('game-timeout-countdown');
+    const alertElement = document.getElementById('active-game-alert');
+    
+    if (!countdownElement || !alertElement) return;
+    
+    function updateCountdown() {
+        if (remainingSeconds <= 0) {
+            // 倒计时结束，重新请求API获取最新状态
+            fetch('/game/api/active-game')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.has_active_game) {
+                        // API返回无活跃游戏，隐藏提示
+                        if (alertElement.parentElement) {
+                            alertElement.parentElement.style.transition = 'opacity 0.5s ease';
+                            alertElement.parentElement.style.opacity = '0';
+                            setTimeout(() => {
+                                alertElement.parentElement.style.display = 'none';
+                            }, 500);
+                        }
+                    } else {
+                        // 还有活跃游戏，重新计算剩余时间
+                        if (data.started_at) {
+                            const newStartTime = new Date(data.started_at);
+                            const newElapsed = Math.floor((new Date() - newStartTime) / 1000);
+                            remainingSeconds = Math.max(0, (data.timeout_minutes * 60) - newElapsed);
+                        }
+                    }
+                })
+                .catch(() => {});
+            
+            if (gameCountdownInterval) {
+                clearInterval(gameCountdownInterval);
+            }
+            return;
+        }
+        
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        
+        if (minutes > 0) {
+            countdownElement.textContent = `${minutes}分${seconds}秒`;
+        } else {
+            countdownElement.textContent = `${seconds}秒`;
+        }
+        
+        remainingSeconds--;
+    }
+    
+    // 立即更新一次
+    updateCountdown();
+    
+    // 每秒更新
+    gameCountdownInterval = setInterval(updateCountdown, 1000);
+}
+</script>
+{% endblock %}

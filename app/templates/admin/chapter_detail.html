@@ -1,0 +1,337 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}章节详情分析{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <!-- 面包屑导航 -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin.knowledge_analysis') }}">知识点分析</a></li>
+                    <li class="breadcrumb-item active" id="breadcrumbChapter">章节详情</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- 筛选栏 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold mb-1">分类维度</label>
+                            <ul class="nav nav-pills nav-sm" id="categoryTabs">
+                                <li class="nav-item">
+                                    <a class="nav-link active py-1" href="#" data-category="class_name">
+                                        <i class="bi bi-people-fill"></i> 按班级
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link py-1" href="#" data-category="major">
+                                        <i class="bi bi-bookmark-fill"></i> 按专业
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold mb-1">选择分类</label>
+                            <select class="form-select form-select-sm" id="categoryValue">
+                                <option value="">请选择...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold mb-1">时间范围</label>
+                            <select class="form-select form-select-sm" id="timeRange">
+                                <option value="7d">近7天</option>
+                                <option value="30d" selected>近30天</option>
+                                <option value="90d">近90天</option>
+                                <option value="all">全部时间</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <label class="form-label fw-bold mb-1 d-block">&nbsp;</label>
+                            <a href="{{ url_for('admin.knowledge_analysis') }}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> 返回概览
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 章节概览卡片 -->
+    <div class="row mb-4" id="chapterOverview" style="display:none;">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="text-muted mb-1">总答题数</div>
+                <div class="fs-4 fw-bold" id="totalAnswers">--</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="text-muted mb-1">整体正确率</div>
+                <div class="fs-4 fw-bold" id="overallRate">--</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="text-muted mb-1">掌握等级</div>
+                <div class="fs-4 fw-bold" id="masteryLabel">--</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3">
+                <div class="text-muted mb-2 text-center">学生答题分布</div>
+                <div class="d-flex justify-content-around" id="studentDist">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 题目错误率排名 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-sort-numeric-down"></i> 题目错误率排名 <small class="text-muted" id="questionCount"></small></h5>
+                    <span class="badge bg-warning text-dark" id="highFreqCount" style="display:none">0 道高频错题</span>
+                </div>
+                <div class="card-body p-0" id="questionsContainer">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-funnel fs-1"></i>
+                        <p class="mt-2">请选择班级/专业后查看题目分析数据</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 题目详情模态框 -->
+<div class="modal fade" id="questionDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">题目详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="questionDetailBody">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const chapterId = {{ chapter_id }};
+let currentCategory = '{{ request.args.get("category", "class_name") }}';
+let currentCategoryValue = '{{ request.args.get("value", "") }}';
+let currentTimeRange = '{{ request.args.get("time_range", "30d") }}';
+
+// 初始化分类维度标签
+document.querySelectorAll('#categoryTabs .nav-link').forEach(tab => {
+    if (tab.dataset.category === currentCategory) {
+        document.querySelectorAll('#categoryTabs .nav-link').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+    }
+    tab.addEventListener('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('#categoryTabs .nav-link').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        currentCategory = this.dataset.category;
+        loadCategoryOptions();
+    });
+});
+
+// 加载分类选项
+function loadCategoryOptions() {
+    const select = document.getElementById('categoryValue');
+    select.innerHTML = '<option value="">加载中...</option>';
+    
+    fetch(`/admin/api/knowledge-analysis/category-options?category=${currentCategory}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                select.innerHTML = '<option value="">请选择...</option>';
+                res.data.options.forEach(opt => {
+                    const selected = opt === currentCategoryValue ? 'selected' : '';
+                    select.innerHTML += `<option value="${opt}" ${selected}>${opt}</option>`;
+                });
+                if (currentCategoryValue) loadDetail();
+            }
+        });
+}
+
+document.getElementById('categoryValue').addEventListener('change', function() {
+    currentCategoryValue = this.value;
+    loadDetail();
+});
+document.getElementById('timeRange').addEventListener('change', function() {
+    currentTimeRange = this.value;
+    loadDetail();
+});
+
+// 加载章节详情
+function loadDetail() {
+    if (!currentCategoryValue) return;
+    
+    document.getElementById('questionsContainer').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <p class="mt-2">加载中...</p>
+        </div>`;
+    
+    const params = new URLSearchParams({
+        category: currentCategory,
+        value: currentCategoryValue,
+        time_range: currentTimeRange
+    });
+    
+    fetch(`/admin/api/knowledge-analysis/chapter/${chapterId}/detail?${params}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) renderDetail(res.data);
+            else document.getElementById('questionsContainer').innerHTML = `<div class="text-center text-danger py-5"><p>${res.error || '加载失败'}</p></div>`;
+        });
+}
+
+// 渲染详情
+function renderDetail(data) {
+    // 面包屑
+    document.getElementById('breadcrumbChapter').textContent = data.chapter.name;
+    document.title = data.chapter.name + ' - 章节详情';
+    
+    // 概览卡片
+    const overview = document.getElementById('chapterOverview');
+    overview.style.display = '';
+    
+    const totalAnswers = data.questions.reduce((s, q) => s + q.total_answers, 0);
+    const totalCorrect = data.questions.reduce((s, q) => s + q.correct_count, 0);
+    const overallRate = totalAnswers > 0 ? (totalCorrect / totalAnswers * 100).toFixed(1) : null;
+    
+    document.getElementById('totalAnswers').textContent = totalAnswers;
+    document.getElementById('overallRate').textContent = overallRate !== null ? overallRate + '%' : '--';
+    
+    if (overallRate !== null) {
+        let label, color;
+        if (overallRate >= 85) { label = '优秀'; color = '#198754'; }
+        else if (overallRate >= 70) { label = '良好'; color = '#0d6efd'; }
+        else if (overallRate >= 60) { label = '一般'; color = '#ffc107'; }
+        else if (overallRate >= 40) { label = '薄弱'; color = '#fd7e14'; }
+        else { label = '严重薄弱'; color = '#dc3545'; }
+        document.getElementById('masteryLabel').innerHTML = `<span class="badge" style="background:${color};color:#fff">${label}</span>`;
+    }
+    
+    // 学生分布
+    const dist = data.student_distribution;
+    document.getElementById('studentDist').innerHTML = `
+        <div class="text-center"><div class="text-success fw-bold">${dist.correct}</div><small class="text-muted">全对</small></div>
+        <div class="text-center"><div class="text-danger fw-bold">${dist.wrong}</div><small class="text-muted">有错</small></div>
+        <div class="text-center"><div class="text-secondary fw-bold">${dist.not_answered}</div><small class="text-muted">未答</small></div>`;
+    
+    // 题目列表
+    const container = document.getElementById('questionsContainer');
+    document.getElementById('questionCount').textContent = `(${data.questions.length}道题)`;
+    
+    const highFreq = data.questions.filter(q => q.is_high_freq);
+    const highFreqBadge = document.getElementById('highFreqCount');
+    if (highFreq.length > 0) {
+        highFreqBadge.style.display = '';
+        highFreqBadge.textContent = highFreq.length + ' 道高频错题';
+    } else {
+        highFreqBadge.style.display = 'none';
+    }
+    
+    if (data.questions.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-5"><p>该章节下暂无题目</p></div>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:5%">#</th>
+                        <th style="width:35%">题目内容</th>
+                        <th style="width:8%">难度</th>
+                        <th style="width:12%">错误率</th>
+                        <th style="width:8%">答题数</th>
+                        <th style="width:8%">正确数</th>
+                        <th style="width:8%">标签</th>
+                        <th style="width:8%">操作</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    data.questions.forEach((q, idx) => {
+        const rateDisplay = q.error_rate !== null ? q.error_rate + '%' : '--';
+        const rateColor = q.error_rate !== null ? (q.error_rate >= 30 ? '#dc3545' : q.error_rate >= 15 ? '#fd7e14' : '#198754') : '#6c757d';
+        const highFreqTag = q.is_high_freq ? '<span class="badge bg-danger">高频错题</span>' : '';
+        const diffColors = {1: 'success', 2: 'warning', 3: 'danger', 4: 'dark'};
+        const diffColor = diffColors[q.difficulty] || 'secondary';
+        
+        html += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td class="text-truncate" style="max-width:300px" title="${q.content_summary}">${q.content_summary}</td>
+                        <td><span class="badge bg-${diffColor}">${q.difficulty_label}</span></td>
+                        <td class="fw-bold" style="color:${rateColor}">${rateDisplay}</td>
+                        <td>${q.total_answers}</td>
+                        <td>${q.correct_count}</td>
+                        <td>${highFreqTag}</td>
+                        <td><button class="btn btn-sm btn-outline-info" onclick='showQuestionDetail(${JSON.stringify(q).replace(/'/g, "&#39;")})'>详情</button></td>
+                    </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// 显示题目详情
+function showQuestionDetail(q) {
+    const reasonLabels = {
+        'careless': '粗心大意', 'knowledge': '知识点不熟悉',
+        'understanding': '审题错误', 'calculation': '计算错误',
+        'memory': '记忆模糊', 'other': '其他原因'
+    };
+    
+    let reasonsHtml = '';
+    if (q.error_reasons && Object.keys(q.error_reasons).length > 0) {
+        reasonsHtml = '<h6 class="mt-3">错误原因分布</h6><div class="row">';
+        for (const [reason, pct] of Object.entries(q.error_reasons)) {
+            const label = reasonLabels[reason] || reason;
+            reasonsHtml += `
+                <div class="col-md-4 mb-2">
+                    <div class="d-flex justify-content-between"><span>${label}</span><span class="fw-bold">${pct}%</span></div>
+                    <div class="progress" style="height:6px"><div class="progress-bar" style="width:${pct}%"></div></div>
+                </div>`;
+        }
+        reasonsHtml += '</div>';
+    }
+    
+    document.getElementById('questionDetailBody').innerHTML = `
+        <div class="mb-3">
+            <h6>题目内容</h6>
+            <div class="p-3 bg-light rounded">${q.content || '无内容'}</div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-4"><strong>正确答案：</strong>${q.correct_answer || '--'}</div>
+            <div class="col-md-4"><strong>错误率：</strong><span style="color:${q.error_rate >= 30 ? '#dc3545' : '#198754'}">${q.error_rate !== null ? q.error_rate + '%' : '--'}</span></div>
+            <div class="col-md-4"><strong>难度：</strong>${q.difficulty_label}</div>
+        </div>
+        ${reasonsHtml}
+    `;
+    
+    new bootstrap.Modal(document.getElementById('questionDetailModal')).show();
+}
+
+// 初始化
+loadCategoryOptions();
+if (currentCategoryValue) loadDetail();
+</script>
+{% endblock %}

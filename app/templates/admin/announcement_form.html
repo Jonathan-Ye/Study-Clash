@@ -1,0 +1,70 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-{% if announcement %}pencil{% else %}plus-circle{% endif %}"></i>
+            {% if announcement %}编辑公告{% else %}新建公告{% endif %}
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">标题 <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" required
+                           value="{{ announcement.title if announcement else '' }}" maxlength="200">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">内容 <span class="text-danger">*</span></label>
+                    <textarea name="content" class="form-control" rows="6" required>{{ announcement.content if announcement else '' }}</textarea>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">优先级</label>
+                    <select name="priority" class="form-select">
+                        <option value="normal" {% if announcement and announcement.priority == 'normal' %}selected{% endif %}>普通</option>
+                        <option value="important" {% if announcement and announcement.priority == 'important' %}selected{% endif %}>重要</option>
+                        <option value="urgent" {% if announcement and announcement.priority == 'urgent' %}selected{% endif %}>紧急</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">展示位置</label>
+                    <select name="display_position" class="form-select">
+                        <option value="top_banner" {% if announcement and announcement.display_position == 'top_banner' %}selected{% endif %}>全站顶部横幅</option>
+                        <option value="home_popup" {% if announcement and announcement.display_position == 'home_popup' %}selected{% endif %}>首页弹窗</option>
+                        <option value="admin_only" {% if announcement and announcement.display_position == 'admin_only' %}selected{% endif %}>管理后台内</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="form-text">选择公告的展示位置和方式</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">发布时间</label>
+                    <input type="datetime-local" name="publish_at" class="form-control"
+                           value="{% if announcement and announcement.publish_at %}{{ announcement.publish_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+                    <div class="form-text">留空表示立即发布</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">过期时间</label>
+                    <input type="datetime-local" name="expire_at" class="form-control"
+                           value="{% if announcement and announcement.expire_at %}{{ announcement.expire_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+                    <div class="form-text">留空表示永不过期</div>
+                </div>
+            </div>
+
+            <hr>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i> {% if announcement %}保存修改{% else %}创建公告{% endif %}
+            </button>
+            <a href="{{ url_for('admin.announcements') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+        </form>
+    </div>
+</div>
+{% endblock %}

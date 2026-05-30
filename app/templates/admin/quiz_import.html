@@ -1,0 +1,573 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+{% if step is not defined %}
+
+{# 步骤1：上传文件 #}
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-upload"></i> 题库导入</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i> 此功能用于<strong>日常批量导入题目</strong>，支持校验预览、冲突处理和章节自动创建。如需系统题库完整备份与恢复，请使用<strong>系统管理 > 题库备份</strong>功能。
+        </div>
+        <form method="post" action="{{ url_for('admin.quiz_import_validate') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">数据文件 <span class="text-danger">*</span></label>
+                    <input type="file" name="data_file" class="form-control" accept=".json,.xlsx,.xls" required>
+                    <div class="form-text">支持JSON或Excel格式，文件大小不超过{{ (max_file_size / 1024 / 1024)|round(1) }}MB</div>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">图片资源包（可选）</label>
+                    <input type="file" name="image_zip" class="form-control" accept=".zip">
+                    <div class="form-text">如果导出时包含图片，请同时上传图片资源包ZIP文件</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">冲突处理策略</label>
+                    <select name="conflict_strategy" class="form-select">
+                        <option value="skip">跳过 - 保留系统已有数据</option>
+                        <option value="overwrite">覆盖 - 用导入数据覆盖已有数据</option>
+                        <option value="append">追加 - 作为新题目插入（忽略ID）</option>
+                    </select>
+                </div>
+            </div>
+
+            <hr>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-search"></i> 校验并预览
+            </button>
+            <a href="{{ url_for('admin.quiz_import_template') }}" class="btn btn-outline-primary ms-2">
+                <i class="bi bi-download"></i> 下载导入模板（含学科/章节下拉选择）
+            </a>
+        </form>
+    </div>
+</div>
+
+{% elif step == 'preview' %}
+
+{# 步骤2：预览确认 #}
+<div class="card shadow-sm">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-eye"></i> 导入预览</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-primary">{{ total_count }}</h3>
+                        <small class="text-muted">总题目数</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-success">{{ valid_count }}</h3>
+                        <small class="text-muted">有效题目</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-warning">{{ conflict_count }}</h3>
+                        <small class="text-muted">冲突/重复</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-danger">{{ invalid_list|length }}</h3>
+                        <small class="text-muted">无效数据</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if conflict_count > 0 %}
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i> 检测到 <strong>{{ conflict_count }}</strong> 道题目冲突（ID或内容重复）
+            {% if conflict_strategy == 'skip' %}（策略：跳过，将保留系统已有数据）
+            {% elif conflict_strategy == 'overwrite' %}（策略：覆盖，将用导入数据覆盖已有数据）
+            {% else %}（策略：追加，将忽略原ID作为新题目插入）{% endif %}
+            <div class="mt-2">
+                <small class="text-muted">冲突题目：</small>
+                {% for detail in conflict_details %}
+                <small class="d-block text-muted">[{{ detail.reason if detail.reason else 'ID' }}冲突] ID {{ detail.id }}：系统已有「{{ detail.existing_content }}{% if detail.existing_content|length >= 50 %}...{% endif %}」→ 导入「{{ detail.import_content }}{% if detail.import_content|length >= 50 %}...{% endif %}」</small>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <p><strong>冲突处理策略：</strong>
+            {% if conflict_strategy == 'skip' %}跳过（保留系统已有数据）
+            {% elif conflict_strategy == 'overwrite' %}覆盖（用导入数据覆盖）
+            {% else %}追加（作为新题目插入）{% endif %}
+        </p>
+
+        {% if has_image_zip %}
+        <p class="text-success"><i class="bi bi-check-circle"></i> 已上传图片资源包</p>
+        {% else %}
+        <p class="text-warning"><i class="bi bi-exclamation-circle"></i> 未上传图片资源包，含图片的题目可能无法正常显示</p>
+        {% endif %}
+
+        {% if new_chapters_count is defined and new_chapters_count > 0 %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> 本次导入将自动创建 <strong>{{ new_chapters_count }}</strong> 个新章节
+        </div>
+        {% endif %}
+
+        <div class="alert alert-light border">
+            <small>
+                <i class="bi bi-lightbulb"></i>
+                <strong>章节填写说明：</strong>
+                章节列支持下拉选择和手动输入。格式为 <code>章名 > 节名 > 小节名</code>，
+                分隔符支持 <code>&gt;</code> 或 <code>/</code>，前后空格可选。
+                例如：<code>第一章 > 第一节</code> 或 <code>第一章/第一节</code>。
+                不存在的章节将自动创建（需同时指定学科）。
+            </small>
+        </div>
+
+        {% if valid_list is defined and valid_list %}
+        {% set conflict_ids = [] %}
+        {% for detail in conflict_details %}
+        {% if detail.id not in conflict_ids %}{% set _ = conflict_ids.append(detail.id) %}{% endif %}
+        {% endfor %}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-list-check"></i> 有效题目明细（{{ valid_count }}条）<small class="text-muted ms-2">可直接编辑修改</small></h6>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small">每页显示</span>
+                    <select id="pageSizeSelect" class="form-select form-select-sm" style="width: auto;">
+                        <option value="50" selected>50条</option>
+                        <option value="100">100条</option>
+                        <option value="200">200条</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                    <table class="table table-bordered table-hover mb-0" id="editableTable">
+                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                            <tr>
+                                <th style="width:40px">序号</th>
+                                <th style="min-width:350px">题目内容</th>
+                                <th style="min-width:130px">学科</th>
+                                <th style="min-width:220px">章节</th>
+                                <th style="min-width:80px">题型</th>
+                                <th style="min-width:80px">难度</th>
+                                <th style="min-width:100px">正确答案</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="paginationContainer" class="d-flex justify-content-between align-items-center p-3 border-top">
+                    <div class="text-muted small">
+                        显示第 <span id="startRow">0</span> - <span id="endRow">0</span> 条，共 <span id="totalRows">0</span> 条
+                    </div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0" id="pagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if invalid_list %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> 无效数据（{{ invalid_list|length }}条）
+                    {% if invalid_list|length > 20 %}
+                    <small class="text-muted">- 默认折叠，点击展开</small>
+                    {% endif %}
+                </h6>
+            </div>
+            <div class="card-body {% if invalid_list|length > 20 %}d-none{% endif %}" id="invalidDetail">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th style="width:60px">行号</th><th>题目内容</th><th>错误原因</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invalid_list %}
+                            <tr>
+                                <td>{{ item.row }}</td>
+                                <td>{{ (item.data.get('content',''))[:30] }}</td>
+                                <td class="text-danger">{{ item.errors|join('；') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% if invalid_list|length > 20 %}
+            <div class="card-footer">
+                <button type="button" class="btn btn-sm btn-outline-warning" onclick="toggleInvalidDetail()">
+                    <i class="bi bi-chevron-down"></i> 展开无效数据
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <hr>
+        <form method="post" action="{{ url_for('admin.quiz_import_execute') }}" id="importExecuteForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="edited_data" id="editedData" value="">
+            <button type="button" class="btn btn-danger" onclick="submitImport()">
+                <i class="bi bi-upload"></i> 确认导入
+            </button>
+            <a href="{{ url_for('admin.quiz_import') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> 返回
+            </a>
+        </form>
+    </div>
+</div>
+
+{% elif step == 'result' %}
+
+{# 步骤3：导入结果 #}
+<div class="card shadow-sm">
+    <div class="card-header {% if import_result.failed > 0 %}bg-warning{% else %}bg-success{% endif %} text-white">
+        <h5 class="mb-0"><i class="bi bi-{% if import_result.failed > 0 %}exclamation-triangle{% else %}check-circle{% endif %}"></i> 导入结果</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-success">{{ import_result.success }}</h3>
+                        <small class="text-muted">成功导入</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-warning">{{ import_result.skipped }}</h3>
+                        <small class="text-muted">跳过</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-info">{{ import_result.overwritten }}</h3>
+                        <small class="text-muted">覆盖</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-danger">{{ import_result.failed }}</h3>
+                        <small class="text-muted">失败</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if import_result.image_result %}
+        <h6>图片处理结果</h6>
+        <p>
+            成功映射: {{ import_result.image_result.mapped }} 个，
+            跳过: {{ import_result.image_result.skipped }} 个
+        </p>
+        {% if import_result.image_result.errors %}
+        <div class="alert alert-warning">
+            <ul class="mb-0">
+                {% for err in import_result.image_result.errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        {% if import_result.failed_details %}
+        <h6>失败详情</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr><th>题目ID</th><th>题目内容</th><th>错误原因</th></tr>
+                </thead>
+                <tbody>
+                    {% for detail in import_result.failed_details %}
+                    <tr>
+                        <td>{{ detail.get('id', '-') }}</td>
+                        <td>{{ detail.get('content', '-') }}</td>
+                        <td class="text-danger">{{ detail.get('error', '') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <hr>
+        <a href="{{ url_for('admin.quiz_import') }}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> 继续导入
+        </a>
+        <a href="{{ url_for('admin.questions') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-list-ul"></i> 查看题目列表
+        </a>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var validList = {{ valid_list | tojson if valid_list is defined else '[]' }};
+var allSubjects = {{ all_subjects_data | tojson if all_subjects_data is defined else '[]' }};
+var allChapters = {{ all_chapters_data | map(attribute='path') | list | tojson if all_chapters_data is defined else '[]' }};
+var conflictIds = [];
+{% for detail in conflict_details %}
+{% if detail.id and detail.id not in conflictIds %}
+conflictIds.push({{ detail.id }});
+{% endif %}
+{% endfor %}
+var chapterSubjects = {};
+{% for c in all_chapters_data %}
+chapterSubjects["{{ c.path }}"] = "{{ c.subject }}";
+{% endfor %}
+
+var currentPage = 1;
+var pageSize = 50;
+var editedData = {};
+
+function renderTable() {
+    var tbody = document.getElementById('tableBody');
+    if (!tbody) return;
+    
+    var start = (currentPage - 1) * pageSize;
+    var end = Math.min(start + pageSize, validList.length);
+    var pageData = validList.slice(start, end);
+    
+    var html = '';
+    pageData.forEach(function(q, pageIdx) {
+        var globalIdx = start + pageIdx;
+        var isConflict = q.id && conflictIds.indexOf(q.id) !== -1;
+        var rowClass = isConflict ? ' class="table-warning"' : '';
+        
+        html += '<tr data-index="' + globalIdx + '"' + rowClass + '>';
+        html += '<td class="align-middle text-center">' + (globalIdx + 1) + '</td>';
+        
+        html += '<td><textarea class="form-control edit-field auto-resize" data-field="content" data-index="' + globalIdx + '" rows="1">' + (q.content || '') + '</textarea></td>';
+        
+        html += '<td class="align-middle"><select class="form-select edit-field" data-field="subject_name" data-index="' + globalIdx + '" onchange="onSubjectChange(this)"><option value="">未指定</option>';
+        allSubjects.forEach(function(s) {
+            var selected = (q.subject_name === s) ? 'selected' : '';
+            html += '<option value="' + s + '" ' + selected + '>' + s + '</option>';
+        });
+        html += '</select></td>';
+        
+        var chVal = q.chapter_name || '';
+        var isInList = allChapters.indexOf(chVal) !== -1;
+        html += '<td class="align-middle">';
+        html += '<select class="form-select form-select-sm edit-field chapter-select" data-field="chapter_name" data-index="' + globalIdx + '" onchange="onChapterChange(this)"' + (isInList ? '' : ' style="display:none"') + '>';
+        html += '<option value="">未指定</option><option value="__manual__">手动输入...</option>';
+        allChapters.forEach(function(c) {
+            var selected = (chVal === c) ? 'selected' : '';
+            var subject = chapterSubjects[c] || '';
+            html += '<option value="' + c + '" data-subject="' + subject + '" ' + selected + '>' + c + '</option>';
+        });
+        html += '</select>';
+        html += '<input type="text" class="form-control form-control-sm edit-field chapter-manual-input" data-field="chapter_name" data-index="' + globalIdx + '" value="' + chVal + '" placeholder="如: 第一章 > 第一节"' + (isInList ? ' style="display:none"' : '') + '>';
+        html += '</td>';
+        
+        html += '<td class="align-middle"><select class="form-select edit-field" data-field="question_type" data-index="' + globalIdx + '">';
+        html += '<option value="single"' + (q.question_type === 'single' ? 'selected' : '') + '>单选</option>';
+        html += '<option value="multiple"' + (q.question_type === 'multiple' ? 'selected' : '') + '>多选</option>';
+        html += '<option value="judge"' + (q.question_type === 'judge' ? 'selected' : '') + '>判断</option>';
+        html += '<option value="fill"' + (q.question_type === 'fill' ? 'selected' : '') + '>填空</option>';
+        html += '</select></td>';
+        
+        html += '<td class="align-middle"><select class="form-select edit-field" data-field="difficulty" data-index="' + globalIdx + '">';
+        html += '<option value="1"' + (q.difficulty === 1 ? 'selected' : '') + '>简单</option>';
+        html += '<option value="2"' + (q.difficulty === 2 ? 'selected' : '') + '>中等</option>';
+        html += '<option value="3"' + (q.difficulty === 3 ? 'selected' : '') + '>困难</option>';
+        html += '<option value="4"' + (q.difficulty === 4 ? 'selected' : '') + '>极难</option>';
+        html += '</select></td>';
+        
+        html += '<td class="align-middle"><input type="text" class="form-control edit-field" data-field="correct_answer" data-index="' + globalIdx + '" value="' + (q.correct_answer || '') + '"></td>';
+        html += '</tr>';
+    });
+    
+    tbody.innerHTML = html;
+    
+    document.getElementById('startRow').textContent = start + 1;
+    document.getElementById('endRow').textContent = end;
+    document.getElementById('totalRows').textContent = validList.length;
+    
+    renderPagination();
+    initPageElements();
+}
+
+function renderPagination() {
+    var pagination = document.getElementById('pagination');
+    if (!pagination) return;
+    
+    var totalPages = Math.ceil(validList.length / pageSize);
+    var html = '';
+    
+    html += '<li class="page-item ' + (currentPage === 1 ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="changePage(1);return false;">首页</a></li>';
+    html += '<li class="page-item ' + (currentPage === 1 ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="changePage(' + (currentPage - 1) + ');return false;">上一页</a></li>';
+    
+    var startPage = Math.max(1, currentPage - 2);
+    var endPage = Math.min(totalPages, currentPage + 2);
+    
+    for (var i = startPage; i <= endPage; i++) {
+        html += '<li class="page-item ' + (i === currentPage ? 'active' : '') + '"><a class="page-link" href="#" onclick="changePage(' + i + ');return false;">' + i + '</a></li>';
+    }
+    
+    html += '<li class="page-item ' + (currentPage === totalPages ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="changePage(' + (currentPage + 1) + ');return false;">下一页</a></li>';
+    html += '<li class="page-item ' + (currentPage === totalPages ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="changePage(' + totalPages + ');return false;">末页</a></li>';
+    
+    pagination.innerHTML = html;
+}
+
+function changePage(page) {
+    var totalPages = Math.ceil(validList.length / pageSize);
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    renderTable();
+    document.getElementById('tableBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function initPageElements() {
+    document.querySelectorAll('[data-field="subject_name"]').forEach(function(sel) {
+        onSubjectChange(sel);
+    });
+    
+    document.querySelectorAll('.auto-resize').forEach(function(ta) {
+        autoResize(ta);
+        ta.addEventListener('input', function() { autoResize(this); });
+    });
+    
+    document.querySelectorAll('.chapter-manual-input').forEach(function(input) {
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                this.value = '';
+                onChapterManualBlur(this);
+                e.preventDefault();
+            }
+        });
+        input.addEventListener('blur', function() {
+            setTimeout(function() { onChapterManualBlur(input); }, 200);
+        });
+    });
+}
+
+function onSubjectChange(subjectSelect) {
+    var row = subjectSelect.closest('tr');
+    var chapterSelect = row.querySelector('.chapter-select');
+    var selectedSubject = subjectSelect.value;
+    
+    if (!chapterSelect) return;
+    
+    var options = chapterSelect.options;
+    for (var i = 0; i < options.length; i++) {
+        var opt = options[i];
+        var optSubject = opt.getAttribute('data-subject');
+        if (!optSubject || !selectedSubject || optSubject === selectedSubject) {
+            opt.style.display = '';
+            opt.hidden = false;
+        } else {
+            opt.style.display = 'none';
+            opt.hidden = true;
+        }
+    }
+    
+    var currentOpt = chapterSelect.selectedOptions[0];
+    if (currentOpt && currentOpt.getAttribute('data-subject') && currentOpt.getAttribute('data-subject') !== selectedSubject) {
+        chapterSelect.value = '';
+    }
+}
+
+function onChapterChange(chapterSelect) {
+    var row = chapterSelect.closest('tr');
+    var manualInput = row.querySelector('.chapter-manual-input');
+    
+    if (chapterSelect.value === '__manual__') {
+        chapterSelect.style.display = 'none';
+        manualInput.style.display = '';
+        manualInput.focus();
+    }
+}
+
+function onChapterManualBlur(manualInput) {
+    if (!manualInput.value.trim()) {
+        var row = manualInput.closest('tr');
+        var chapterSelect = row.querySelector('.chapter-select');
+        manualInput.style.display = 'none';
+        chapterSelect.style.display = '';
+        chapterSelect.value = '';
+    }
+}
+
+function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+}
+
+function submitImport() {
+    if (!confirm('确定要导入题目吗？此操作将修改数据库数据。')) return;
+    
+    var edits = {};
+    
+    document.querySelectorAll('#editableTable .edit-field').forEach(function(field) {
+        if (field.classList.contains('chapter-manual-input') && field.style.display === 'none') return;
+        if (field.classList.contains('chapter-select') && field.style.display === 'none') return;
+        
+        var idx = field.getAttribute('data-index');
+        var fieldName = field.getAttribute('data-field');
+        var value = field.value;
+        
+        if (value === '__manual__') return;
+        
+        if (!edits[idx]) edits[idx] = {};
+        edits[idx][fieldName] = value;
+    });
+    
+    document.getElementById('editedData').value = JSON.stringify(edits);
+    document.getElementById('importExecuteForm').submit();
+}
+
+function toggleInvalidDetail() {
+    var detailDiv = document.getElementById('invalidDetail');
+    var btn = event.target.closest('button');
+    if (detailDiv.classList.contains('d-none')) {
+        detailDiv.classList.remove('d-none');
+        btn.innerHTML = '<i class="bi bi-chevron-up"></i> 收起无效数据';
+    } else {
+        detailDiv.classList.add('d-none');
+        btn.innerHTML = '<i class="bi bi-chevron-down"></i> 展开无效数据';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (validList.length > 0) {
+        renderTable();
+    }
+    
+    document.getElementById('pageSizeSelect').addEventListener('change', function() {
+        pageSize = parseInt(this.value);
+        currentPage = 1;
+        renderTable();
+    });
+});
+</script>
+{% endblock %}

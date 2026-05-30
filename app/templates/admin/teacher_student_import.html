@@ -1,0 +1,223 @@
+{% extends "admin/base.html" %}
+
+{% block title %}学生导入 - 教师工作台{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+
+    {% if step == 'preview' %}
+    {# ========== 导入预览 ========== #}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h4 class="mb-0"><i class="bi bi-file-earmark-check"></i> 导入数据预览</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>数据概览：</strong> 共读取 <strong>{{ total }}</strong> 条数据
+                        <span class="ms-3">
+                            <span class="badge bg-success">可导入：{{ valid_users|length }}</span>
+                            <span class="badge bg-danger">无法导入：{{ invalid_users|length }}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if valid_users %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-check-circle text-success"></i> 可导入数据 ({{ valid_users|length }} 条)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>行号</th>
+                                    <th>用户名</th>
+                                    <th>姓名</th>
+                                    <th>学号</th>
+                                    <th>班级</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in valid_users[:20] %}
+                                <tr>
+                                    <td>{{ user.row }}</td>
+                                    <td>{{ user.username }}</td>
+                                    <td>{{ user.real_name }}</td>
+                                    <td>{{ user.student_id }}</td>
+                                    <td>{{ user.class_name or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% if valid_users|length > 20 %}
+                        <p class="text-muted text-center">仅显示前20条，共 {{ valid_users|length }} 条</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if invalid_users %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-x-circle text-danger"></i> 无法导入的数据 ({{ invalid_users|length }} 条)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>行号</th>
+                                    <th>姓名</th>
+                                    <th>学号</th>
+                                    <th>错误信息</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in invalid_users %}
+                                <tr class="table-danger">
+                                    <td>{{ user.row }}</td>
+                                    <td>{{ user.real_name }}</td>
+                                    <td>{{ user.student_id }}</td>
+                                    <td>{{ user.errors|join(', ') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-12">
+            <form method="POST" action="{{ url_for('admin.teacher_student_import_confirm') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="d-flex justify-content-between">
+                    <button type="submit" name="action" value="cancel" class="btn btn-secondary">
+                        <i class="bi bi-x-lg"></i> 取消导入
+                    </button>
+                    {% if valid_users %}
+                    <button type="submit" name="action" value="confirm" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> 确认导入 {{ valid_users|length }} 条数据
+                    </button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% elif step == 'result' %}
+    {# ========== 导入结果 ========== #}
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h4 class="mb-0"><i class="bi bi-check2-circle"></i> 导入结果</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <div class="p-3">
+                                <h2 class="text-success">{{ success_count }}</h2>
+                                <p class="text-muted">成功导入</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3">
+                                <h2 class="text-warning">{{ skip_count }}</h2>
+                                <p class="text-muted">跳过重复</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3">
+                                <h2 class="text-danger">{{ error_count }}</h2>
+                                <p class="text-muted">导入失败</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <a href="{{ url_for('admin.teacher_student_import') }}" class="btn btn-primary">
+                <i class="bi bi-arrow-left"></i> 返回继续导入
+            </a>
+        </div>
+    </div>
+
+    {% else %}
+    {# ========== 上传表单 ========== #}
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-upload"></i> 上传学生数据文件</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.teacher_student_import_validate') }}" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label for="file" class="form-label">选择文件</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls,.csv" required>
+                            <div class="form-text">支持 .xlsx、.xls、.csv 格式，单次最多导入 500 条记录</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> 上传并预览
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-download"></i> 下载导入模板</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">请先下载模板，按格式填写学生数据后上传</p>
+                    <a href="{{ url_for('admin.teacher_student_import_template') }}" class="btn btn-outline-primary w-100">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> 下载模板
+                    </a>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> 填写说明</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><strong>必填字段：</strong>用户名、姓名、密码、学号</li>
+                        <li class="mb-2"><strong>用户名：</strong>英文/数字/下划线，3-64字符</li>
+                        <li class="mb-2"><strong>密码：</strong>至少6位字符</li>
+                        <li class="mb-2"><strong>学号：</strong>必须是纯数字</li>
+                        <li class="mb-2">用户名、学号、邮箱不能重复</li>
+                        <li>不填邮箱将自动生成</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

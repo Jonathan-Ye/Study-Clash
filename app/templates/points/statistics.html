@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}数据统计 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h4 class="mb-4"><i class="bi bi-graph-up"></i> 数据统计</h4>
+    </div>
+</div>
+
+<div class="row mb-4" id="overview-stats">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3 id="total-points">{{ current_user.total_points }}</h3>
+                <small>总积分</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3 id="accuracy">0%</h3>
+                <small>正确率</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3 id="total-games">0</h3>
+                <small>游戏场次</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3 id="win-rate">0%</h3>
+                <small>胜率</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">答题统计</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <h4 id="total-questions" class="text-primary">0</h4>
+                        <small class="text-muted">总题数</small>
+                    </div>
+                    <div class="col-4">
+                        <h4 id="total-correct" class="text-success">0</h4>
+                        <small class="text-muted">正确数</small>
+                    </div>
+                    <div class="col-4">
+                        <h4 id="total-wrong" class="text-danger">0</h4>
+                        <small class="text-muted">错误数</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">学习时长</h5>
+            </div>
+            <div class="card-body text-center">
+                <h2 id="total-time" class="text-primary">0</h2>
+                <small class="text-muted">小时</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">周对比</h5>
+    </div>
+    <div class="card-body">
+        <div class="row text-center" id="weekly-comparison">
+            <div class="col-md-3">
+                <p class="text-muted mb-1">本周答题</p>
+                <h4 id="this-week-questions">0</h4>
+                <small id="questions-change" class="text-success"></small>
+            </div>
+            <div class="col-md-3">
+                <p class="text-muted mb-1">本周正确</p>
+                <h4 id="this-week-correct">0</h4>
+                <small id="correct-change" class="text-success"></small>
+            </div>
+            <div class="col-md-3">
+                <p class="text-muted mb-1">本周积分</p>
+                <h4 id="this-week-points">0</h4>
+                <small id="points-change" class="text-success"></small>
+            </div>
+            <div class="col-md-3">
+                <p class="text-muted mb-1">本周游戏</p>
+                <h4 id="this-week-games">0</h4>
+                <small id="games-change" class="text-success"></small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/points/api/statistics/overview')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('total-points').textContent = data.total_points;
+            document.getElementById('accuracy').textContent = data.accuracy + '%';
+            document.getElementById('total-games').textContent = data.total_games;
+            document.getElementById('win-rate').textContent = data.win_rate + '%';
+            document.getElementById('total-questions').textContent = data.total_questions;
+            document.getElementById('total-correct').textContent = data.total_correct;
+            document.getElementById('total-wrong').textContent = data.total_wrong;
+            document.getElementById('total-time').textContent = data.total_time_hours;
+        });
+    
+    fetch('/points/api/statistics/weekly-comparison')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('this-week-questions').textContent = data.this_week.questions;
+            document.getElementById('this-week-correct').textContent = data.this_week.correct;
+            document.getElementById('this-week-points').textContent = data.this_week.points;
+            document.getElementById('this-week-games').textContent = data.this_week.games;
+            
+            const changes = data.changes;
+            document.getElementById('questions-change').textContent = changes.questions + '%';
+            document.getElementById('correct-change').textContent = changes.correct + '%';
+            document.getElementById('points-change').textContent = changes.points + '%';
+            document.getElementById('games-change').textContent = changes.games + '%';
+        });
+});
+</script>
+{% endblock %}

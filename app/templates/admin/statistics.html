@@ -1,0 +1,213 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}数据统计{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4><i class="bi bi-bar-chart"></i> 数据统计</h4>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-people fs-1 text-primary"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">日活跃用户</h6>
+                            <h3 class="mb-0" id="daily_active">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-people fs-1 text-success"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">周活跃用户</h6>
+                            <h3 class="mb-0" id="weekly_active">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-people fs-1 text-info"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">月活跃用户</h6>
+                            <h3 class="mb-0" id="monthly_active">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-controller fs-1 text-warning"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">总游戏场次</h6>
+                            <h3 class="mb-0" id="total_games">-</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> 用户增长趋势</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="userGrowthChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> 游戏活跃度</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="gameActivityChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadOverview();
+    loadUserGrowth();
+    loadGameActivity();
+});
+
+function loadOverview() {
+    fetch('{{ url_for("admin.api_statistics_overview") }}')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('daily_active').textContent = data.today.new_users;
+            document.getElementById('weekly_active').textContent = data.week.new_users;
+            document.getElementById('monthly_active').textContent = data.month.new_users;
+            document.getElementById('total_games').textContent = data.today.active_games + data.week.active_games;
+        });
+}
+
+function loadUserGrowth() {
+    fetch('{{ url_for("admin.api_statistics_trends") }}?days=7')
+        .then(r => r.json())
+        .then(data => {
+            const ctx = document.getElementById('userGrowthChart').getContext('2d');
+            const labels = data.user_trend.map(item => item.date.slice(5));
+            const userCounts = data.user_trend.map(item => item.count);
+            const gameCounts = data.game_trend.map(item => item.count);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '新增用户',
+                        data: userCounts,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: '游戏场次',
+                        data: gameCounts,
+                        borderColor: 'rgb(255, 159, 64)',
+                        backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        });
+}
+
+function loadGameActivity() {
+    fetch('{{ url_for("admin.api_statistics_trends") }}?days=30')
+        .then(r => r.json())
+        .then(data => {
+            const ctx = document.getElementById('gameActivityChart').getContext('2d');
+            const labels = data.game_trend.map(item => item.date.slice(5));
+            const counts = data.game_trend.map(item => item.count);
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '游戏场次',
+                        data: counts,
+                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                        borderColor: 'rgb(255, 159, 64)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        });
+}
+</script>
+{% endblock %}

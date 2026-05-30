@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}薄弱专练 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1">🎯 薄弱专练</h3>
+            <p class="text-muted mb-0">系统自动识别你最薄弱的知识点，集中攻克</p>
+        </div>
+        <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回仪表盘
+        </a>
+    </div>
+
+    <div class="row g-4">
+        {% for wp in weak_points %}
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm" style="border-radius:var(--radius-lg);border-top:4px solid var(--danger-color);">
+                <div class="card-body text-center p-4">
+                    <div style="font-size:3rem;margin-bottom:0.5rem;">{% if loop.index == 1 %}🔴{% elif loop.index == 2 %}🟠{% else %}🟡{% endif %}</div>
+                    <h5 class="card-title mb-1">{{ wp.name }}</h5>
+                    <p class="text-muted mb-3">{{ wp.subject_name }}</p>
+                    <div class="d-flex justify-content-center gap-3 mb-3">
+                        <div class="text-center">
+                            <div class="fw-bold text-danger" style="font-size:1.5rem;">{{ wp.not_mastered_count }}</div>
+                            <small class="text-muted">未掌握</small>
+                        </div>
+                        <div class="text-center">
+                            <div class="fw-bold" style="font-size:1.5rem;">{{ wp.wrong_count }}</div>
+                            <small class="text-muted">总错题</small>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('wrong.weak_practice_chapter', chapter_id=wp.id) }}" class="btn btn-danger w-100">
+                        <i class="bi bi-lightning"></i> 开始专练
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

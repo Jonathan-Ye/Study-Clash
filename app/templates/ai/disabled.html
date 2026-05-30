@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}AI功能维护中 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 text-center">
+            <div style="font-size:4rem;margin-bottom:1rem">🤖</div>
+            <h3 class="mb-3">AI功能维护中</h3>
+            <p class="text-muted mb-4">{{ message | default('AI智能分析功能暂时关闭，请稍后再试') }}</p>
+            <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+                <i class="bi bi-house"></i> 返回首页
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

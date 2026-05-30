@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Study Clash - 学习对战{% endblock %}</title>
+    <link href="{{ url_for('static', filename='lib/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='lib/bootstrap-icons/css/bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">
+                <img src="{{ get_logo_url() }}" alt="Study Clash" class="logo-img">
+                <span>Study Clash</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.endpoint == 'main.dashboard' }}" href="{{ url_for('main.dashboard') }}">
+                            <i class="bi bi-house"></i> 首页
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('game.') }}" href="{{ url_for('game.index') }}">
+                            <i class="bi bi-controller"></i> 刷题
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('wrong.') }}" href="{{ url_for('wrong.dashboard') }}">
+                            <i class="bi bi-journal-x"></i> 错题本
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('points.') }}" href="{{ url_for('points.leaderboard') }}">
+                            <i class="bi bi-trophy"></i> 排行榜
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('ai_') }}" href="{{ url_for('ai_analysis.index') }}">
+                            <i class="bi bi-robot"></i> AI分析
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item d-flex align-items-center">
+                        <a class="nav-link text-decoration-none position-relative" href="{{ url_for('main.my_notifications') }}" style="cursor: pointer;">
+                            <i class="bi bi-bell-fill" style="font-size: 1.2rem;"></i>
+                            {% set unread_count = current_user.notifications|selectattr("is_read", "equalto", false)|list|length %}
+                            {% if unread_count > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.7rem;">
+                                {{ unread_count if unread_count < 10 else '9+' }}
+                            </span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item d-flex align-items-center">
+                        <a class="nav-link text-decoration-none" href="{{ url_for('points.my_points') }}" style="cursor: pointer;">
+                            <i class="bi bi-star-fill text-warning"></i>
+                            <span class="fw-bold">{{ current_user.total_points }}</span> 积分
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" data-bs-toggle="dropdown" aria-expanded="false">
+                            <img src="{{ current_user.get_avatar_url() }}"
+                                 class="rounded-circle" width="32" height="32" alt="avatar"
+                                 style="object-fit: cover; border: 2px solid rgba(255,255,255,0.3);">
+                            <span class="d-none d-md-inline">{{ current_user.nickname or current_user.username }}</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-lg">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('main.profile') }}">
+                                    <i class="bi bi-person"></i> 个人资料
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('points.my_points') }}">
+                                    <i class="bi bi-coin"></i> 积分明细
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('points.statistics') }}">
+                                    <i class="bi bi-graph-up"></i> 数据统计
+                                </a>
+                            </li>
+                            {% if current_user.is_admin %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('admin.index') }}">
+                                    <i class="bi bi-gear"></i> 后台管理
+                                </a>
+                            </li>
+                            {% elif current_user.role == 'teacher' %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('admin.subjects') }}">
+                                    <i class="bi bi-mortarboard"></i> 教师工作台
+                                </a>
+                            </li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                    <i class="bi bi-box-arrow-right"></i> 退出登录
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.login') }}">
+                            <i class="bi bi-box-arrow-in-right"></i> 登录
+                        </a>
+                    </li>
+                    {% if site_info.registration_enabled %}
+                    <li class="nav-item">
+                        <a class="btn btn-light btn-sm ms-2" href="{{ url_for('auth.register') }}">
+                            <i class="bi bi-person-plus"></i> 注册
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    {# 系统公告横幅 #}
+    {% if active_announcements %}
+    {% for ann in active_announcements %}
+    <div class="alert {% if ann.priority == 'urgent' %}alert-danger{% elif ann.priority == 'important' %}alert-warning{% else %}alert-info{% endif%} alert-dismissible fade show mb-0 rounded-0 py-2" role="alert">
+        <div class="container d-flex align-items-center">
+            <i class="bi bi-{% if ann.priority == 'urgent' %}exclamation-triangle-fill{% elif ann.priority == 'important' %}exclamation-circle-fill{% else %}info-circle-fill{% endif %} me-2"></i>
+            <strong>{{ ann.title }}</strong>
+            <span class="ms-2">{{ ann.content[:100] }}{% if ann.content|length > 100 %}...{% endif %}</span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {# 首页弹窗公告 #}
+    {% if popup_announcements %}
+    {% for ann in popup_announcements %}
+    <div class="modal fade" id="announcementPopupModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header {% if ann.priority == 'urgent' %}bg-danger text-white{% elif ann.priority == 'important' %}bg-warning{% else %}bg-info text-white{% endif %}">
+                    <h6 class="modal-title">
+                        <i class="bi bi-{% if ann.priority == 'urgent' %}exclamation-triangle-fill{% elif ann.priority == 'important' %}exclamation-circle-fill{% else %}info-circle-fill{% endif %} me-2"></i>
+                        {{ ann.title }}
+                    </h6>
+                    <button type="button" class="btn-close {% if ann.priority != 'important' %}btn-close-white{% endif %}" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {{ ann.content }}
+                </div>
+                <div class="modal-footer">
+                    <div class="form-check me-auto">
+                        <input class="form-check-input" type="checkbox" id="dontShowAgain" data-announcement-id="{{ ann.id }}">
+                        <label class="form-check-label small text-muted" for="dontShowAgain">今日不再提示</label>
+                    </div>
+                    <button type="button" class="btn btn-sm {% if ann.priority == 'urgent' %}btn-danger{% elif ann.priority == 'important' %}btn-warning{% else %}btn-info{% endif %}" data-bs-dismiss="modal">我知道了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <main class="container my-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'info' }} alert-dismissible fade show fade-in" role="alert">
+                        <i class="bi bi-{{ 'exclamation-circle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }}"></i>
+                        <span>{{ message }}</span>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="py-5 mt-auto">
+        <div class="container">
+            <div class="row g-4">
+                {% if site_info.show_site_info %}
+                <div class="col-lg-4 col-md-6">
+                    <h5 class="mb-3">
+                        <i class="bi bi-lightning-charge-fill"></i> {{ site_info.site_name }}
+                    </h5>
+                    {% if site_info.site_desc %}
+                    <p class="text-muted mb-4">{{ site_info.site_desc }}</p>
+                    {% endif %}
+                    {% if site_info.show_social %}
+                    <div class="d-flex gap-2">
+                        {% if site_info.social_wechat %}
+                        <a href="{{ site_info.social_wechat if site_info.social_wechat.startswith('http') else '#' }}" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-wechat"></i>
+                        </a>
+                        {% endif %}
+                        {% if site_info.social_qq %}
+                        <a href="{{ site_info.social_qq if site_info.social_qq.startswith('http') else '#' }}" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-chat-dots"></i>
+                        </a>
+                        {% endif %}
+                        {% if site_info.social_weibo %}
+                        <a href="{{ site_info.social_weibo if site_info.social_weibo.startswith('http') else '#' }}" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-sina-weibo"></i>
+                        </a>
+                        {% endif %}
+                        {% if site_info.social_github %}
+                        <a href="{{ site_info.social_github if site_info.social_github.startswith('http') else '#' }}" target="_blank" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-github"></i>
+                        </a>
+                        {% endif %}
+                        {% if site_info.social_email %}
+                        <a href="{% if site_info.social_email.startswith('mailto:') %}{{ site_info.social_email }}{% else %}mailto:{{ site_info.social_email }}{% endif %}" class="btn btn-sm btn-outline-light rounded-circle" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-envelope"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                {% if site_info.show_game_modes %}
+                <div class="col-lg-2 col-md-6">
+                    <h6 class="mb-3 fw-bold text-uppercase small">游戏模式</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <a href="{{ url_for('game.single') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-person me-2"></i>单人挑战
+                            </a>
+                        </li>
+                        <li class="mb-2">
+                            <a href="{{ url_for('game.battle') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-people me-2"></i>双人对战
+                            </a>
+                        </li>
+                        <li class="mb-2">
+                            <a href="{{ url_for('game.four') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-people-fill me-2"></i>四人挑战
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
+                
+                {% if site_info.show_features %}
+                <div class="col-lg-2 col-md-6">
+                    <h6 class="mb-3 fw-bold text-uppercase small">功能</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <a href="{{ url_for('wrong.dashboard') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-journal-x me-2"></i>错题本
+                            </a>
+                        </li>
+                        <li class="mb-2">
+                            <a href="{{ url_for('points.leaderboard') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-trophy me-2"></i>排行榜
+                            </a>
+                        </li>
+                        <li class="mb-2">
+                            <a href="{{ url_for('points.statistics') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-graph-up me-2"></i>数据统计
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
+                
+                {% if site_info.show_help %}
+                <div class="col-lg-2 col-md-6">
+                    <h6 class="mb-3 fw-bold text-uppercase small">帮助支持</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <a href="{{ url_for('main.about') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-info-circle me-2"></i>关于我们
+                            </a>
+                        </li>
+                        <li class="mb-2">
+                            <a href="{{ url_for('main.help') }}" class="text-muted text-decoration-none hover:text-light transition-colors">
+                                <i class="bi bi-question-circle me-2"></i>使用帮助
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
+                
+                {% if site_info.show_contact %}
+                <div class="col-lg-2 col-md-6">
+                    <h6 class="mb-3 fw-bold text-uppercase small">联系方式</h6>
+                    <ul class="list-unstyled text-muted">
+                        {% if site_info.show_contact_email and site_info.contact_email %}
+                        <li class="mb-2">
+                            <i class="bi bi-envelope me-2"></i>{{ site_info.contact_email }}
+                        </li>
+                        {% endif %}
+                        {% if site_info.show_contact_phone and site_info.contact_phone %}
+                        <li class="mb-2">
+                            <i class="bi bi-telephone me-2"></i>{{ site_info.contact_phone }}
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            
+            <hr class="my-4 border-secondary opacity-25">
+            
+            <div class="row align-items-center">
+                <div class="col-md-8 text-center text-md-start">
+                    {% if site_info.show_copyright and site_info.copyright %}
+                    <p class="mb-1 text-muted small">{{ site_info.copyright }}</p>
+                    {% endif %}
+                    {% if site_info.show_icp and site_info.icp %}
+                    <p class="mb-0 text-muted small">
+                        <a href="https://beian.miit.gov.cn/" target="_blank" class="text-muted text-decoration-none hover:text-light transition-colors">{{ site_info.icp }}</a>
+                    </p>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 text-center text-md-end">
+                    {% if site_info.show_slogan and site_info.footer_slogan %}
+                    <p class="mb-0 text-muted small">
+                        {{ site_info.footer_slogan }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='lib/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='lib/socket.io/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='lib/chart.js/chart.umd.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    {% if current_user.is_authenticated %}
+    <script>
+    // 全局Socket连接 - 用于接收游戏邀请等实时通知
+    (function() {
+        if (window.globalSocket) return;
+        
+        window.globalSocket = io();
+        
+        window.globalSocket.on('connect', function() {
+            console.log('[全局Socket] 已连接, sid:', window.globalSocket.id);
+        });
+        
+        // 监听游戏邀请
+        window.globalSocket.on('game_invitation', function(data) {
+            console.log('[全局Socket] 收到游戏邀请:', data);
+            showGameInvitationModal(data);
+        });
+    })();
+    
+    // 显示游戏邀请通知（角落Toast）
+    function showGameInvitationModal(data) {
+        // 创建Toast容器
+        let container = document.getElementById('invite-toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'invite-toast-container';
+            container.className = 'position-fixed bottom-0 end-0 p-3';
+            container.style.zIndex = '9999';
+            document.body.appendChild(container);
+        }
+        
+        const gameTypeText = data.game_type === 'battle' ? '双人对战' : '四人挑战';
+        const toastId = 'invite-toast-' + Date.now();
+        
+        const toastEl = document.createElement('div');
+        toastEl.id = toastId;
+        toastEl.className = 'toast show';
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.setAttribute('aria-atomic', 'true');
+        toastEl.style.minWidth = '350px';
+        toastEl.innerHTML = `
+            <div class="toast-header bg-primary text-white">
+                <i class="bi bi-envelope-fill me-2"></i>
+                <strong class="me-auto">收到游戏邀请</strong>
+                <small class="text-white-50">${data.inviter_name}</small>
+                <button type="button" class="btn-close btn-close-white btn-sm" onclick="dismissInviteToast('${toastId}')"></button>
+            </div>
+            <div class="toast-body">
+                <div class="text-center mb-2">
+                    <img src="${data.inviter_avatar || '/static/avatars/default.png'}" 
+                         class="rounded-circle" width="32" height="32">
+                    <span class="ms-2">${data.inviter_name} 邀请你加入${gameTypeText}</span>
+                </div>
+                <div class="mb-2 small">
+                    <span class="text-muted">房间码：</span><code>${data.room_code}</code>
+                    <span class="ms-2 text-muted">学科：</span>${data.subject_name}
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-primary flex-fill" onclick="acceptInvite('${data.room_code}', '${toastId}')">
+                        <i class="bi bi-check-circle"></i> 接受
+                    </button>
+                    <button class="btn btn-sm btn-secondary flex-fill" onclick="declineInvite(${data.inviter_id}, '${data.room_code}', '${toastId}')">
+                        <i class="bi bi-x-circle"></i> 拒绝
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(toastEl);
+        
+        // 30秒后自动消失
+        setTimeout(() => dismissInviteToast(toastId), 30000);
+    }
+    
+    function dismissInviteToast(toastId) {
+        const toast = document.getElementById(toastId);
+        if (toast) {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }
+    }
+    
+    function acceptInvite(roomCode, toastId) {
+        dismissInviteToast(toastId);
+        
+        // 先监听接受成功事件
+        const handleAccepted = function(data) {
+            if (data.room_code === roomCode) {
+                window.globalSocket.off('invitation_accepted', handleAccepted);
+                // 收到成功后再跳转
+                window.location.href = '/game/room/' + roomCode;
+            }
+        };
+        window.globalSocket.on('invitation_accepted', handleAccepted);
+        
+        // 发送接受邀请请求
+        window.globalSocket.emit('accept_invitation', {
+            room_code: roomCode
+        });
+        
+        // 5秒超时后直接跳转（防止事件丢失）
+        setTimeout(function() {
+            window.globalSocket.off('invitation_accepted', handleAccepted);
+            window.location.href = '/game/room/' + roomCode;
+        }, 5000);
+    }
+    
+    function declineInvite(inviterId, roomCode, toastId) {
+        dismissInviteToast(toastId);
+        window.globalSocket.emit('decline_invitation', {
+            inviter_id: inviterId,
+            room_code: roomCode
+        });
+    }
+    </script>
+    {% endif %}
+    <script>
+    // CSRF Token for AJAX requests
+    (function() {
+        var csrfToken = document.querySelector('meta[name="csrf-token"]');
+        if (csrfToken) {
+            var token = csrfToken.getAttribute('content');
+            // Override fetch to include CSRF token
+            var originalFetch = window.fetch;
+            window.fetch = function(url, options) {
+                options = options || {};
+                if (!options.headers) options.headers = {};
+                if (options.method && options.method.toUpperCase() !== 'GET') {
+                    if (options.headers instanceof Headers) {
+                        options.headers.set('X-CSRFToken', token);
+                    } else if (typeof options.headers === 'object') {
+                        options.headers['X-CSRFToken'] = token;
+                    }
+                }
+                return originalFetch.call(this, url, options);
+            };
+            // Also set for XMLHttpRequest
+            var origOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function() {
+                origOpen.apply(this, arguments);
+                if (arguments[0] && arguments[0].toUpperCase() !== 'GET') {
+                    this.setRequestHeader('X-CSRFToken', token);
+                }
+            };
+        }
+    })();
+    </script>
+    <script>
+    // 首页弹窗公告
+    (function() {
+        var popupEl = document.getElementById('announcementPopupModal');
+        if (popupEl) {
+            var annId = popupEl.querySelector('[data-announcement-id]');
+            var id = annId ? annId.getAttribute('data-announcement-id') : '';
+            var storageKey = 'announcement_dismissed_' + id;
+            var today = new Date().toISOString().slice(0, 10);
+            var dismissed = localStorage.getItem(storageKey);
+            if (dismissed !== today) {
+                var modal = new bootstrap.Modal(popupEl);
+                modal.show();
+            }
+            var checkbox = document.getElementById('dontShowAgain');
+            if (checkbox) {
+                checkbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        localStorage.setItem(storageKey, today);
+                    } else {
+                        localStorage.removeItem(storageKey);
+                    }
+                });
+            }
+        }
+    })();
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

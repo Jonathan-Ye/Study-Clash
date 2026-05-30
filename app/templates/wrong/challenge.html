@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}闯关模式 - Study Clash{% endblock %}
+
+{% block extra_css %}
+<style>
+.level-card {
+    border-radius: var(--radius-lg); padding: 1.5rem; text-align: center;
+    transition: all var(--transition); position: relative; overflow: hidden;
+    min-height: 180px; display: flex; flex-direction: column; justify-content: center;
+}
+.level-card.cleared { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border: 2px solid #10b981; }
+.level-card.unlocked { background: white; border: 2px solid var(--primary-color); box-shadow: var(--shadow-md); cursor: pointer; }
+.level-card.unlocked:hover { transform: translateY(-6px); box-shadow: var(--shadow-xl); }
+.level-card.locked { background: var(--gray-100); border: 2px solid var(--gray-300); opacity: 0.6; }
+.level-number { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.level-card.cleared .level-number { color: var(--success-color); }
+.level-card.unlocked .level-number { color: var(--primary-color); }
+.level-card.locked .level-number { color: var(--gray-400); }
+.level-status { font-size: 1.5rem; margin-top: 0.5rem; }
+.level-chapter { font-size: 0.95rem; font-weight: 600; margin-top: 0.5rem; }
+.level-subject { font-size: 0.8rem; color: var(--gray-500); }
+.level-count { font-size: 0.85rem; margin-top: 0.5rem; }
+.level-card.cleared .level-count { color: var(--success-color); }
+.level-card.unlocked .level-count { color: var(--primary-color); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1">⚔️ 闯关模式</h3>
+            <p class="text-muted mb-0">按章节逐关挑战，通关解锁下一关（答对率≥80%通关）</p>
+        </div>
+        <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回仪表盘
+        </a>
+    </div>
+
+    <div class="row g-4">
+        {% for level in levels %}
+        <div class="col-md-3 col-sm-4 col-6">
+            {% if level.is_unlocked and not level.is_cleared %}
+            <a href="{{ url_for('wrong.challenge_level', chapter_id=level.chapter_id) }}" class="text-decoration-none">
+                <div class="level-card unlocked">
+                    <div class="level-number">第{{ level.level }}关</div>
+                    <div class="level-status">🚀</div>
+                    <div class="level-chapter">{{ level.chapter_name }}</div>
+                    <div class="level-subject">{{ level.subject_name }}</div>
+                    <div class="level-count">{{ level.wrong_count }} 道错题 · 点击挑战</div>
+                </div>
+            </a>
+            {% elif level.is_cleared %}
+            <div class="level-card cleared">
+                <div class="level-number">第{{ level.level }}关</div>
+                <div class="level-status">✅</div>
+                <div class="level-chapter">{{ level.chapter_name }}</div>
+                <div class="level-subject">{{ level.subject_name }}</div>
+                <div class="level-count">已通关 🎉</div>
+            </div>
+            {% else %}
+            <div class="level-card locked">
+                <div class="level-number">第{{ level.level }}关</div>
+                <div class="level-status">🔒</div>
+                <div class="level-chapter">{{ level.chapter_name }}</div>
+                <div class="level-subject">{{ level.subject_name }}</div>
+                <div class="level-count">{{ level.wrong_count }} 道错题</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

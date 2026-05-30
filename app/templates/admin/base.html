@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-0">
+    <div class="col-md-3 col-lg-2">
+        <nav class="admin-sidebar d-flex flex-column" id="adminSidebar">
+            <!-- 侧边栏头部 -->
+            <div class="sidebar-header p-3">
+                <div class="d-flex align-items-center">
+                    <div class="sidebar-icon-wrap me-2">
+                        <i class="bi {% if current_user.role == 'teacher' %}bi-mortarboard-fill{% else %}bi-shield-lock-fill{% endif %}"></i>
+                    </div>
+                    <div>
+                        <div class="sidebar-title">{% if current_user.role == 'teacher' %}教师工作台{% else %}管理后台{% endif %}</div>
+                        <div class="sidebar-user">{{ current_user.real_name or current_user.nickname or current_user.username }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 导航菜单 -->
+            <div class="sidebar-nav flex-grow-1 overflow-auto py-2" id="adminNavMenu">
+                {% for group in admin_nav_config %}
+                {# 判断当前分组是否有活跃项 #}
+                {% set ns = namespace(has_active=false) %}
+                {% for item in group.nav_items %}
+                    {% if request.endpoint and (request.endpoint == item.endpoint or request.endpoint.startswith(item.endpoint + '.')) %}
+                        {% set ns.has_active = true %}
+                    {% endif %}
+                {% endfor %}
+                
+                <div class="nav-group mb-1">
+                    <!-- 分组标题 -->
+                    <div class="nav-group-title {% if ns.has_active %}active{% endif %}"
+                         data-bs-toggle="collapse"
+                         data-bs-target="#navCollapse{{ loop.index }}"
+                         aria-expanded="{{ 'true' if ns.has_active else 'false' }}"
+                         role="button">
+                        <i class="bi {{ group.icon }} me-2"></i>
+                        <span>{{ group.label }}</span>
+                        <i class="bi bi-chevron-down ms-auto nav-group-arrow"></i>
+                    </div>
+                    
+                    <!-- 子导航项 -->
+                    <div id="navCollapse{{ loop.index }}"
+                         class="collapse {% if ns.has_active %}show{% endif %}">
+                        {% for item in group.nav_items %}
+                        {% set is_active = request.endpoint and (request.endpoint == item.endpoint or request.endpoint.startswith(item.endpoint + '.')) %}
+                        <a href="{{ item.url }}"
+                           class="nav-item-link {% if is_active %}active{% endif %}">
+                            <i class="bi {{ item.icon }} me-2"></i>
+                            <span>{{ item.label }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </nav>
+    </div>
+    <div class="col-md-9 col-lg-10">
+        <div class="admin-main p-4">
+            {# 面包屑导航 #}
+            {% if breadcrumb is defined and breadcrumb %}
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('admin.index') }}" class="text-decoration-none">
+                            <i class="bi bi-house-door"></i> 管理后台
+                        </a>
+                    </li>
+                    {% for item in breadcrumb %}
+                    {% if not loop.last %}
+                    <li class="breadcrumb-item">
+                        {% if item.endpoint is defined %}
+                        <a href="{{ url_for(item.endpoint) }}" class="text-decoration-none">{{ item.label }}</a>
+                        {% else %}
+                        <span>{{ item.label }}</span>
+                        {% endif %}
+                    </li>
+                    {% else %}
+                    <li class="breadcrumb-item active" aria-current="page">{{ item.label }}</li>
+                    {% endif %}
+                    {% endfor %}
+                </ol>
+            </nav>
+            {% endif %}
+
+            {# 统一Flash消息 #}
+            {% block admin_flash %}
+            {% endblock %}
+
+            {% block admin_content %}{% endblock %}
+        </div>
+    </div>
+</div>
+
+{# 通用确认对话框 #}
+<div class="modal fade" id="confirmActionModal" tabindex="-1" aria-labelledby="confirmActionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="confirmActionModalLabel">
+                    <i class="bi bi-exclamation-triangle"></i> 操作确认
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="confirmActionMessage">
+                确定要执行此操作吗？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmActionBtn">确认执行</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+<style>
+/* ===== 侧边栏整体 ===== */
+.admin-sidebar {
+    min-height: calc(100vh - 56px);
+    background: #ffffff;
+    border-right: 1px solid var(--gray-200, #e5e7eb);
+    box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+
+/* ===== 头部区域 ===== */
+.sidebar-header {
+    border-bottom: 1px solid var(--gray-100, #f3f4f6);
+    padding-bottom: 12px !important;
+}
+.sidebar-icon-wrap {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.05rem;
+    box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+    flex-shrink: 0;
+}
+.sidebar-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--gray-800, #1f2937);
+    line-height: 1.3;
+}
+.sidebar-user {
+    font-size: 0.75rem;
+    color: var(--gray-400, #9ca3af);
+    line-height: 1.2;
+    margin-top: 1px;
+}
+
+/* ===== 导航滚动 ===== */
+.sidebar-nav {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gray-200, #e5e7eb) transparent;
+}
+.sidebar-nav::-webkit-scrollbar {
+    width: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: var(--gray-200, #e5e7eb);
+    border-radius: 2px;
+}
+
+/* ===== 分组标题 ===== */
+.nav-group-title {
+    display: flex;
+    align-items: center;
+    padding: 9px 16px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--gray-400, #9ca3af);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    cursor: pointer;
+    transition: color 150ms ease, background 150ms ease;
+    user-select: none;
+    border-radius: 6px;
+    margin: 0 8px;
+}
+.nav-group-title:hover {
+    color: var(--gray-600, #4b5563);
+    background: var(--gray-50, #f9fafb);
+}
+.nav-group-title.active {
+    color: var(--gray-700, #374151);
+}
+.nav-group-arrow {
+    font-size: 0.6rem;
+    transition: transform 200ms ease;
+    opacity: 0.5;
+}
+.nav-group-title[aria-expanded="true"] .nav-group-arrow {
+    transform: rotate(180deg);
+}
+
+/* ===== 子导航项 ===== */
+.nav-item-link {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px 8px 38px;
+    font-size: 0.84rem;
+    font-weight: 500;
+    color: var(--gray-500, #6b7280);
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    transition: all 150ms ease;
+    border-radius: 0 6px 6px 0;
+    margin-right: 10px;
+    position: relative;
+}
+.nav-item-link i {
+    font-size: 0.95rem;
+    transition: color 150ms ease;
+}
+.nav-item-link:hover {
+    color: var(--gray-800, #1f2937);
+    background: linear-gradient(90deg, rgba(59,130,246,0.06) 0%, rgba(59,130,246,0.02) 100%);
+    border-left-color: rgba(59,130,246,0.3);
+}
+.nav-item-link:hover i {
+    color: #3b82f6;
+}
+.nav-item-link.active {
+    color: #1d4ed8;
+    background: linear-gradient(90deg, rgba(59,130,246,0.1) 0%, rgba(59,130,246,0.03) 100%);
+    border-left-color: #3b82f6;
+    font-weight: 600;
+}
+.nav-item-link.active i {
+    color: #3b82f6;
+}
+.nav-item-link.active::after {
+    content: '';
+    position: absolute;
+    left: -3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 18px;
+    background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+    border-radius: 0 2px 2px 0;
+}
+
+/* ===== 主内容区 ===== */
+.admin-main {
+    min-height: calc(100vh - 56px);
+    background: var(--gray-50, #f9fafb);
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 768px) {
+    .admin-sidebar {
+        min-height: auto;
+    }
+    .admin-main {
+        min-height: auto;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 确认对话框通用函数
+function confirmAction(formId, message) {
+    const modal = document.getElementById('confirmActionModal');
+    const msgEl = document.getElementById('confirmActionMessage');
+    const btnEl = document.getElementById('confirmActionBtn');
+    msgEl.textContent = message || '确定要执行此操作吗？此操作不可撤销。';
+    const bsModal = new bootstrap.Modal(modal);
+    btnEl.onclick = function() {
+        const form = document.getElementById(formId);
+        if (form) {
+            form.submit();
+        }
+        bsModal.hide();
+    };
+    bsModal.show();
+}
+
+// Flash消息自动消失
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.alert[data-auto-dismiss]').forEach(function(alert) {
+        const delay = parseInt(alert.getAttribute('data-auto-dismiss')) || 3000;
+        setTimeout(function() {
+            const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+            bsAlert.close();
+        }, delay);
+    });
+});
+</script>
+{% endblock %}

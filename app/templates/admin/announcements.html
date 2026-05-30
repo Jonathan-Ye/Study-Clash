@@ -1,0 +1,142 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="bi bi-megaphone"></i> 系统公告</h5>
+    <a href="{{ url_for('admin.create_announcement') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle"></i> 新建公告
+    </a>
+</div>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    <option value="published" {% if status_filter == 'published' %}selected{% endif %}>已发布</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待发布</option>
+                    <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>已过期</option>
+                    <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>草稿</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="priority" class="form-select form-select-sm">
+                    <option value="">全部优先级</option>
+                    <option value="normal" {% if priority_filter == 'normal' %}selected{% endif %}>普通</option>
+                    <option value="important" {% if priority_filter == 'important' %}selected{% endif %}>重要</option>
+                    <option value="urgent" {% if priority_filter == 'urgent' %}selected{% endif %}>紧急</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
+                <a href="{{ url_for('admin.announcements') }}" class="btn btn-outline-secondary btn-sm">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>标题</th>
+                        <th>优先级</th>
+                        <th>展示位置</th>
+                        <th>状态</th>
+                        <th>已读</th>
+                        <th>发布时间</th>
+                        <th>过期时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in pagination.items %}
+                    <tr>
+                        <td>{{ a.title }}</td>
+                        <td>
+                            {% if a.priority == 'urgent' %}
+                            <span class="badge bg-danger">紧急</span>
+                            {% elif a.priority == 'important' %}
+                            <span class="badge bg-warning text-dark">重要</span>
+                            {% else %}
+                            <span class="badge bg-secondary">普通</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if a.display_position == 'top_banner' %}
+                            全站横幅
+                            {% elif a.display_position == 'home_popup' %}
+                            首页弹窗
+                            {% else %}
+                            管理后台
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set es = a.effective_status|default(a.status) %}
+                            {% if es == 'published' %}
+                            <span class="badge bg-success">已发布</span>
+                            {% elif es == 'pending' %}
+                            <span class="badge bg-warning text-dark">待发布</span>
+                            {% elif es == 'expired' %}
+                            <span class="badge bg-secondary">已过期</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark">草稿</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">
+                            <a href="{{ url_for('admin.announcement_read_details', id=a.id) }}" class="text-decoration-none">
+                                {{ a.read_count }}/{{ a.total_users }} ({{ a.read_rate }}%)
+                            </a>
+                        </td>
+                        <td class="small">{{ a.publish_at.strftime('%Y-%m-%d %H:%M') if a.publish_at else '立即' }}</td>
+                        <td class="small">{{ a.expire_at.strftime('%Y-%m-%d %H:%M') if a.expire_at else '永不过期' }}</td>
+                        <td>
+                            <a href="{{ url_for('admin.edit_announcement', id=a.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="post" action="{{ url_for('admin.delete_announcement', id=a.id) }}" class="d-inline" id="delAnnouncement{{ a.id }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        onclick="confirmAction('delAnnouncement{{ a.id }}, {{ '确定要删除公告「' + a.title + '」吗？' | tojson }})">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-3">暂无公告</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if pagination.pages > 1 %}
+    <div class="card-footer bg-light">
+        <nav class="d-flex justify-content-center">
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin.announcements', page=pagination.prev_num) if pagination.has_prev else '#' }}">&laquo;</a>
+                </li>
+                {% for p in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+                    {% if p %}
+                    <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin.announcements', page=p) }}">{{ p }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin.announcements', page=pagination.next_num) if pagination.has_next else '#' }}">&raquo;</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "admin/base.html" %}
+
+{% block title %}系统监控 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-activity"></i> 系统监控</h4>
+        <button class="btn btn-outline-primary" onclick="refreshStats()">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+        </button>
+    </div>
+
+    <div class="row g-4" id="monitorCards">
+        <!-- CPU -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title text-muted"><i class="bi bi-cpu"></i> CPU 使用率</h6>
+                    <div class="display-4 fw-bold {% if stats.cpu_percent != 'N/A' and stats.cpu_percent > 80 %}text-danger{% elif stats.cpu_percent != 'N/A' and stats.cpu_percent > 60 %}text-warning{% else %}text-primary{% endif %}" id="cpuValue">
+                        {{ stats.cpu_percent }}{% if stats.cpu_percent != 'N/A' %}%{% endif %}
+                    </div>
+                    <div class="progress mt-3" style="height: 8px;">
+                        <div class="progress-bar {% if stats.cpu_percent != 'N/A' and stats.cpu_percent > 80 %}bg-danger{% elif stats.cpu_percent != 'N/A' and stats.cpu_percent > 60 %}bg-warning{% else %}bg-primary{% endif %}"
+                             style="width: {{ stats.cpu_percent if stats.cpu_percent != 'N/A' else 0 }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title text-muted"><i class="bi bi-memory"></i> 内存使用</h6>
+                    <div class="display-4 fw-bold {% if stats.memory.percent != 'N/A' and stats.memory.percent > 80 %}text-danger{% elif stats.memory.percent != 'N/A' and stats.memory.percent > 60 %}text-warning{% else %}text-success{% endif %}" id="memValue">
+                        {{ stats.memory.percent }}{% if stats.memory.percent != 'N/A' %}%{% endif %}
+                    </div>
+                    <div class="text-muted small mt-1" id="memDetail">
+                        已用 {{ stats.memory.used }} / 总计 {{ stats.memory.total }}
+                    </div>
+                    <div class="progress mt-3" style="height: 8px;">
+                        <div class="progress-bar {% if stats.memory.percent != 'N/A' and stats.memory.percent > 80 %}bg-danger{% elif stats.memory.percent != 'N/A' and stats.memory.percent > 60 %}bg-warning{% else %}bg-success{% endif %}"
+                             style="width: {{ stats.memory.percent if stats.memory.percent != 'N/A' else 0 }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disk -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title text-muted"><i class="bi bi-hdd"></i> 磁盘使用</h6>
+                    <div class="display-4 fw-bold {% if stats.disk.percent != 'N/A' and stats.disk.percent > 80 %}text-danger{% elif stats.disk.percent != 'N/A' and stats.disk.percent > 60 %}text-warning{% else %}text-info{% endif %}" id="diskValue">
+                        {{ stats.disk.percent }}{% if stats.disk.percent != 'N/A' %}%{% endif %}
+                    </div>
+                    <div class="text-muted small mt-1" id="diskDetail">
+                        已用 {{ stats.disk.used }} / 总计 {{ stats.disk.total }}
+                    </div>
+                    <div class="progress mt-3" style="height: 8px;">
+                        <div class="progress-bar {% if stats.disk.percent != 'N/A' and stats.disk.percent > 80 %}bg-danger{% elif stats.disk.percent != 'N/A' and stats.disk.percent > 60 %}bg-warning{% else %}bg-info{% endif %}"
+                             style="width: {{ stats.disk.percent if stats.disk.percent != 'N/A' else 0 }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DB Size -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title text-muted"><i class="bi bi-database"></i> 数据库大小</h6>
+                    <div class="display-4 fw-bold text-secondary" id="dbSizeValue">
+                        {{ stats.db_size }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Online Users -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title text-muted"><i class="bi bi-people"></i> 在线用户</h6>
+                    <div class="display-4 fw-bold text-success" id="onlineUsersValue">
+                        {{ stats.online_users }}
+                    </div>
+                    <div class="text-muted small mt-1">近30分钟活跃</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Uptime -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title text-muted"><i class="bi bi-clock"></i> 系统运行时间</h6>
+                    <div class="h3 fw-bold text-primary" id="uptimeValue">
+                        {{ stats.uptime }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+function refreshStats() {
+    fetch('{{ url_for("admin.monitor_stats") }}')
+        .then(response => response.json())
+        .then(data => {
+            // CPU
+            const cpuEl = document.getElementById('cpuValue');
+            cpuEl.textContent = data.cpu_percent !== 'N/A' ? data.cpu_percent + '%' : 'N/A';
+
+            // Memory
+            const memEl = document.getElementById('memValue');
+            memEl.textContent = data.memory.percent !== 'N/A' ? data.memory.percent + '%' : 'N/A';
+            document.getElementById('memDetail').textContent =
+                '已用 ' + data.memory.used + ' / 总计 ' + data.memory.total;
+
+            // Disk
+            const diskEl = document.getElementById('diskValue');
+            diskEl.textContent = data.disk.percent !== 'N/A' ? data.disk.percent + '%' : 'N/A';
+            document.getElementById('diskDetail').textContent =
+                '已用 ' + data.disk.used + ' / 总计 ' + data.disk.total;
+
+            // DB Size
+            document.getElementById('dbSizeValue').textContent = data.db_size;
+
+            // Online Users
+            document.getElementById('onlineUsersValue').textContent = data.online_users;
+
+            // Uptime
+            document.getElementById('uptimeValue').textContent = data.uptime;
+        })
+        .catch(err => {
+            console.error('刷新监控数据失败:', err);
+        });
+}
+</script>
+{% endblock %}

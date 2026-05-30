@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+{% block title %}限时挑战 - Study Clash{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 限时挑战顶部栏 */
+.timed-top-bar {
+    background: var(--gradient-primary); border-radius: var(--radius-lg);
+    padding: 1rem 1.5rem; color: white; margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-md); display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.8rem;
+}
+.timer-display { font-size: 2.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.timer-warning { color: #fbbf24; animation: timer-blink 0.5s ease-in-out infinite; }
+.timer-danger { color: #fca5a5; animation: timer-blink 0.3s ease-in-out infinite; }
+@keyframes timer-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.timer-normal { color: #a7f3d0; }
+.timer-bar-wrap { width: 180px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); overflow: hidden; margin-top: 4px; }
+.timer-bar-fill { height: 100%; border-radius: 3px; background: white; transition: width 1s linear; }
+.timed-stat { text-align: center; }
+.timed-stat-val { font-size: 1.4rem; font-weight: 700; }
+.timed-stat-label { font-size: 0.7rem; opacity: 0.8; }
+
+/* 题目卡片 - 复用review风格 */
+.timed-question-card {
+    background: white; border-radius: var(--radius-lg); padding: 2rem;
+    box-shadow: var(--shadow-md); margin-bottom: 1rem;
+}
+.timed-question-title { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; line-height: 1.6; }
+.timed-question-number { color: var(--primary-color); font-weight: 700; margin-right: 0.3rem; }
+
+/* 题型提示 */
+.type-hint {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--gray-100); border-radius: var(--radius-full);
+    padding: 0.3rem 0.8rem; font-size: 0.8rem; color: var(--gray-600); margin-bottom: 1rem;
+}
+
+/* 选项样式 - 与review一致 */
+.timed-options { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; }
+.timed-option {
+    display: flex; align-items: center; gap: 0.8rem;
+    padding: 0.8rem 1rem; border: 2px solid var(--gray-200); border-radius: var(--radius);
+    cursor: pointer; transition: all var(--transition); background: white;
+}
+.timed-option:hover { border-color: var(--primary-light); background: #eff6ff; }
+.timed-option.selected { border-color: var(--primary-color); background: #eff6ff; }
+.timed-option-letter {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--gray-100);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem; color: var(--gray-600); flex-shrink: 0;
+    transition: all var(--transition);
+}
+.timed-option.selected .timed-option-letter { background: var(--primary-color); color: white; }
+.timed-option-text { font-size: 0.95rem; line-height: 1.5; }
+.timed-option input { display: none; }
+
+/* 判断题选项 */
+.judge-options { flex-direction: row; gap: 1rem; }
+.judge-option { flex: 1; justify-content: center; text-align: center; padding: 1rem; }
+.judge-icon { font-size: 1.5rem; margin-right: 0.5rem; }
+
+/* 提交按钮 */
+.btn-timed-submit {
+    background: var(--gradient-primary); color: white; border: none;
+    border-radius: var(--radius); padding: 0.7rem 2rem; font-weight: 600;
+    font-size: 1rem; cursor: pointer; transition: all var(--transition);
+    box-shadow: var(--shadow-sm);
+}
+.btn-timed-submit:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+/* 答题结果 */
+.result-feedback { border-radius: var(--radius); padding: 1rem 1.2rem; margin-bottom: 1rem; }
+.result-feedback.correct { background: #ecfdf5; border-left: 4px solid var(--success-color); }
+.result-feedback.wrong { background: #fef2f2; border-left: 4px solid var(--danger-color); }
+
+/* 最终结果弹窗 */
+.result-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1050; }
+.result-card { background: white; border-radius: var(--radius-xl); padding: 2.5rem; max-width: 480px; width: 90%; box-shadow: var(--shadow-xl); text-align: center; }
+.result-trophy { font-size: 4rem; margin-bottom: 0.5rem; }
+.result-stats { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0; }
+.result-stat-item { text-align: center; }
+.result-stat-val { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+.result-stat-label { font-size: 0.75rem; color: var(--gray-500); margin-top: 2px; }
+
+@media (max-width: 768px) {
+    .timed-top-bar { padding: 0.8rem 1rem; }
+    .timer-display { font-size: 2rem; }
+    .timer-bar-wrap { width: 120px; }
+    .timed-question-card { padding: 1.2rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- 限时挑战顶部栏 -->
+    <div class="timed-top-bar">
+        <div class="d-flex align-items-center gap-3">
+            <div>
+                <div style="font-size:0.85rem;opacity:0.9;">⏱️ 限时挑战</div>
+                <div class="timer-display timer-normal" id="timer-display">{{ timed_seconds }}</div>
+                <div class="timer-bar-wrap">
+                    <div class="timer-bar-fill" id="timer-bar" style="width:100%"></div>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-4">
+            <div class="timed-stat">
+                <div class="timed-stat-val" id="progress-text">1/{{ wrong_questions|length }}</div>
+                <div class="timed-stat-label">进度</div>
+            </div>
+            <div class="timed-stat">
+                <div class="timed-stat-val" id="correct-count">0</div>
+                <div class="timed-stat-label">答对</div>
+            </div>
+            <div class="timed-stat">
+                <div class="timed-stat-val" id="wrong-count">0</div>
+                <div class="timed-stat-label">答错</div>
+            </div>
+            <div class="timed-stat">
+                <div class="timed-stat-val" id="timeout-count">0</div>
+                <div class="timed-stat-label">超时</div>
+            </div>
+        </div>
+        <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-sm btn-outline-light" style="border-radius:var(--radius);">
+            <i class="bi bi-x-lg"></i> 退出
+        </a>
+    </div>
+
+    <!-- 题目区域 -->
+    <div id="question-area">
+        {% for wrong in wrong_questions %}
+        {# 兼容WrongQuestion和Question两种数据结构 #}
+        {% if wrong.question_id is defined %}
+            {# WrongQuestion对象 #}
+            {% set question = wrong.question %}
+            {% set wrong_id = wrong.id %}
+        {% else %}
+            {# Question对象 #}
+            {% set question = wrong %}
+            {% set wrong_id = None %}
+        {% endif %}
+        <div class="timed-question-card" id="q-{{ loop.index }}" data-id="{{ question.id }}" data-wrong-id="{{ wrong_id if wrong_id else '' }}" style="display:{% if loop.index == 1 %}block{% else %}none{% endif %}">
+            <div class="timed-question-title">
+                <span class="timed-question-number">{{ loop.index }}.</span>
+                {{ question.content }}
+            </div>
+
+            <!-- 题型提示 -->
+            <div class="type-hint">
+                <i class="bi bi-info-circle-fill"></i>
+                {% if question.question_type == 'single' %}
+                请选择<strong>一个</strong>正确答案
+                {% elif question.question_type == 'multiple' %}
+                请选择<strong>所有</strong>正确答案（多选）
+                {% else %}
+                请判断以下说法是否正确
+                {% endif %}
+            </div>
+
+            <!-- 选项 -->
+            <div class="timed-options {% if question.question_type == 'judge' %}judge-options{% endif %}">
+                {% for option_key, option_value, option_image in question.get_options() %}
+                <div class="timed-option {% if question.question_type == 'judge' %}judge-option{% endif %}"
+                     data-option="{{ option_key }}"
+                     onclick="selectTimedOption(this, {{ question.id }}, '{{ question.question_type }}')">
+                    <input type="{{ 'radio' if question.question_type in ['single', 'judge'] else 'checkbox' }}"
+                           name="answer-{{ question.id }}" value="{{ option_key }}">
+                    {% if question.question_type == 'judge' %}
+                    <span class="judge-icon">
+                        {% if option_key == 'A' %}<i class="bi bi-check-circle-fill text-success"></i>
+                        {% else %}<i class="bi bi-x-circle-fill text-danger"></i>{% endif %}
+                    </span>
+                    <span>{{ option_value }}</span>
+                    {% else %}
+                    <span class="timed-option-letter">{{ option_key }}</span>
+                    <span class="timed-option-text">{{ option_value }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <button class="btn-timed-submit" onclick="submitTimed({{ question.id }})">
+                <i class="bi bi-check-circle"></i> 提交答案
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 答题结果展示区 -->
+    <div id="result-area" class="timed-question-card" style="display:none;">
+        <div id="result-content"></div>
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <button class="btn-timed-submit" id="next-btn" onclick="nextQuestion()">
+                <i class="bi bi-arrow-right"></i> 下一题
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 最终结果弹窗 -->
+<div class="result-overlay" id="final-overlay" style="display:none;">
+    <div class="result-card">
+        <div class="result-trophy">🏆</div>
+        <h3>挑战结束</h3>
+        <div class="result-stats">
+            <div class="result-stat-item">
+                <div class="result-stat-val text-primary" id="final-total">0</div>
+                <div class="result-stat-label">总题</div>
+            </div>
+            <div class="result-stat-item">
+                <div class="result-stat-val text-success" id="final-correct">0</div>
+                <div class="result-stat-label">答对</div>
+            </div>
+            <div class="result-stat-item">
+                <div class="result-stat-val text-danger" id="final-wrong">0</div>
+                <div class="result-stat-label">答错</div>
+            </div>
+            <div class="result-stat-item">
+                <div class="result-stat-val text-warning" id="final-timeout">0</div>
+                <div class="result-stat-label">超时</div>
+            </div>
+            <div class="result-stat-item">
+                <div class="result-stat-val text-info" id="final-time">0s</div>
+                <div class="result-stat-label">总用时</div>
+            </div>
+        </div>
+        <a href="{{ url_for('wrong.dashboard') }}" class="btn-timed-submit" style="display:inline-block;text-decoration:none;">
+            <i class="bi bi-house"></i> 返回仪表盘
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const totalQ = {{ wrong_questions|length }};
+const timedSec = {{ timed_seconds }};
+let currentIdx = 0;
+let timeLeft = timedSec;
+let timerInterval = null;
+let qStartTime = Date.now();
+let stats = {correct:0, wrong:0, timeout:0, totalTime:0};
+const allIds = [{% for w in wrong_questions %}{{ w.id if w.question_id is defined else w.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+const allWrongIds = [{% for w in wrong_questions %}{{ w.id if w.question_id is defined else 'null' }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+// 选项选择
+function selectTimedOption(el, wqId, qType) {
+    const isMulti = qType === 'multiple';
+    if (!isMulti) {
+        el.parentElement.querySelectorAll('.timed-option').forEach(o => {
+            o.classList.remove('selected');
+            o.querySelector('input').checked = false;
+        });
+    }
+    el.classList.toggle('selected');
+    el.querySelector('input').checked = el.classList.contains('selected');
+}
+
+// 倒计时
+function startTimer() {
+    timeLeft = timedSec;
+    updateTimerUI();
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerUI();
+        if (timeLeft <= 0) { clearInterval(timerInterval); handleTimeout(); }
+    }, 1000);
+}
+
+function updateTimerUI() {
+    const el = document.getElementById('timer-display');
+    const bar = document.getElementById('timer-bar');
+    el.textContent = timeLeft;
+    const pct = (timeLeft / timedSec) * 100;
+    bar.style.width = pct + '%';
+    el.className = 'timer-display ' + (timeLeft <= 5 ? 'timer-danger' : timeLeft <= 10 ? 'timer-warning' : 'timer-normal');
+}
+
+function handleTimeout() {
+    const qId = allIds[currentIdx];
+    const wrongId = allWrongIds[currentIdx];
+    stats.timeout++;
+    stats.totalTime += timedSec;
+    document.getElementById('timeout-count').textContent = stats.timeout;
+    
+    const submitData = { answer: '', is_timeout: true, time_spent: timedSec };
+    if (wrongId) {
+        submitData.wrong_question_id = wrongId;
+    } else {
+        submitData.question_id = qId;
+    }
+    
+    fetch('/wrong/api/timed-submit', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(submitData)
+    }).then(r => r.json()).then(data => showResult(data, true)).catch(() => {
+        showResult({is_correct:false, is_timeout:true, correct_answer:'?', analysis:'网络异常，按超时处理'}, true);
+    });
+}
+
+function submitTimed(qId) {
+    clearInterval(timerInterval);
+    const timeSpent = Math.round((Date.now() - qStartTime) / 1000);
+    const card = document.getElementById('q-' + (currentIdx+1));
+    const wrongId = card.dataset.wrongId;
+    const checked = card.querySelectorAll('input:checked');
+    if (checked.length === 0) {
+        // 恢复计时并提示
+        startTimer();
+        card.querySelectorAll('.timed-option').forEach(o => {
+            o.style.animation = 'none';
+            void o.offsetWidth;
+            o.style.animation = 'shake 0.3s ease';
+        });
+        return;
+    }
+    const answer = Array.from(checked).map(c=>c.value).join(',');
+    
+    const submitData = { answer: answer, is_timeout: false, time_spent: timeSpent };
+    if (wrongId) {
+        submitData.wrong_question_id = wrongId;
+    } else {
+        submitData.question_id = qId;
+    }
+
+    fetch('/wrong/api/timed-submit', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(submitData)
+    }).then(r => { if(!r.ok) throw new Error('HTTP'); return r.json(); })
+    .then(data => { stats.totalTime += timeSpent; showResult(data, false); })
+    .catch(() => { stats.totalTime += timeSpent; showResult({is_correct:false, correct_answer:'?', analysis:'提交失败'}, false); });
+}
+
+function showResult(data, isTimeout) {
+    document.getElementById('question-area').style.display = 'none';
+    document.getElementById('result-area').style.display = 'block';
+    const rc = document.getElementById('result-content');
+    if (data.is_correct) {
+        stats.correct++;
+        document.getElementById('correct-count').textContent = stats.correct;
+        rc.innerHTML = '<div class="result-feedback correct"><h5 style="color:var(--success-color);">✅ 答对了！</h5></div>';
+    } else {
+        stats.wrong++;
+        document.getElementById('wrong-count').textContent = stats.wrong;
+        const timeoutTag = isTimeout ? '<span class="badge bg-warning me-2">⏰ 超时</span>' : '';
+        rc.innerHTML = `<div class="result-feedback wrong">
+            ${timeoutTag}<h5 style="color:var(--danger-color);">❌ 答错了</h5>
+            <p class="mb-1"><strong>正确答案：</strong><span class="text-success">${data.correct_answer}</span></p>
+            <p class="mb-0 text-muted"><strong>解析：</strong>${data.analysis||'暂无'}</p>
+        </div>`;
+    }
+    if (currentIdx >= totalQ - 1) {
+        document.getElementById('next-btn').innerHTML = '<i class="bi bi-trophy"></i> 查看结果';
+        document.getElementById('next-btn').onclick = showFinal;
+    }
+}
+
+function nextQuestion() {
+    currentIdx++;
+    if (currentIdx >= totalQ) { showFinal(); return; }
+    document.getElementById('result-area').style.display = 'none';
+    document.getElementById('question-area').style.display = 'block';
+    for (let i=1; i<=totalQ; i++) document.getElementById('q-'+i).style.display = 'none';
+    document.getElementById('q-'+(currentIdx+1)).style.display = 'block';
+    document.getElementById('progress-text').textContent = (currentIdx+1)+'/'+totalQ;
+    qStartTime = Date.now();
+    startTimer();
+}
+
+function showFinal() {
+    document.getElementById('final-total').textContent = totalQ;
+    document.getElementById('final-correct').textContent = stats.correct;
+    document.getElementById('final-wrong').textContent = stats.wrong;
+    document.getElementById('final-timeout').textContent = stats.timeout;
+    document.getElementById('final-time').textContent = stats.totalTime + 's';
+    document.getElementById('final-overlay').style.display = 'flex';
+}
+
+// 启动
+qStartTime = Date.now();
+startTimer();
+</script>
+{% endblock %}

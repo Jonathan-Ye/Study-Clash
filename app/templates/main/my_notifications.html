@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}我的通知 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3><i class="bi bi-bell-fill text-primary"></i> 我的通知</h3>
+            <div>
+                {% if notifications|selectattr("is_read", "equalto", false)|list|length > 0 %}
+                <button class="btn btn-outline-primary me-2" onclick="markAllRead()">
+                    <i class="bi bi-check-all"></i> 全部标记为已读
+                </button>
+                {% endif %}
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> 返回首页
+                </a>
+            </div>
+        </div>
+        
+        {% if notifications %}
+        <div class="list-group">
+            {% for notification in notifications %}
+            <div class="list-group-item list-group-item-action {% if not notification.is_read %}list-group-item-info{% endif %}" 
+                 onclick="markAsRead({{ notification.id }})">
+                <div class="d-flex w-100 justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h5 class="mb-1">
+                            {% if notification.notification_type == 'feedback_resolved' %}
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            {% elif notification.notification_type == 'feedback_rejected' %}
+                            <i class="bi bi-x-circle-fill text-warning me-2"></i>
+                            {% else %}
+                            <i class="bi bi-info-circle-fill text-primary me-2"></i>
+                            {% endif %}
+                            {{ notification.title }}
+                        </h5>
+                        <p class="mb-1">{{ notification.content|replace('\n', '<br>')|safe }}</p>
+                        <small class="text-muted">
+                            {{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% if notification.is_read %}
+                            <span class="badge bg-secondary ms-2">已读</span>
+                            {% else %}
+                            <span class="badge bg-primary ms-2">未读</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div>
+                        {% if notification.related_type == 'question_feedback' and notification.related_id %}
+                        <a href="{{ url_for('main.my_feedback') }}" class="btn btn-sm btn-outline-primary" 
+                           onclick="event.stopPropagation()">
+                            查看反馈
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-bell-slash text-muted" style="font-size: 4rem;"></i>
+                <h5 class="mt-3 text-muted">暂无通知</h5>
+                <p class="text-muted">当您提交的反馈被处理时，您将收到通知</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function markAsRead(notificationId) {
+    const element = event.currentTarget;
+    if (element.classList.contains('list-group-item-info')) {
+        fetch(`/notification/${notificationId}/mark-read`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                element.classList.remove('list-group-item-info');
+                element.querySelector('.badge').className = 'badge bg-secondary ms-2';
+                element.querySelector('.badge').textContent = '已读';
+                
+                const unreadCount = document.querySelectorAll('.list-group-item-info').length;
+                updateBadge(unreadCount);
+            }
+        });
+    }
+}
+
+function markAllRead() {
+    fetch('/notifications/mark-all-read', {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.querySelectorAll('.list-group-item-info').forEach(el => {
+                el.classList.remove('list-group-item-info');
+                el.querySelector('.badge').className = 'badge bg-secondary ms-2';
+                el.querySelector('.badge').textContent = '已读';
+            });
+            updateBadge(0);
+        }
+    });
+}
+
+function updateBadge(count) {
+    const badge = document.querySelector('.nav-link .badge');
+    if (badge) {
+        if (count === 0) {
+            badge.remove();
+        } else {
+            badge.textContent = count < 10 ? count : '9+';
+        }
+    }
+}
+</script>
+{% endblock %}

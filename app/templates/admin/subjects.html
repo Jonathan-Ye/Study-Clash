@@ -1,0 +1,68 @@
+{% extends "admin/base.html" %}
+
+{% block title %}学科管理 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h4><i class="bi bi-book"></i> 学科管理</h4>
+        <a href="{{ url_for('admin.create_subject') }}" class="btn btn-primary">
+            <i class="bi bi-plus"></i> 添加学科
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    {% for subject in subjects %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title">
+                            <i class="bi {{ subject.icon or 'bi-book' }} text-primary"></i>
+                            {{ subject.name }}
+                        </h5>
+                        <p class="card-text text-muted small">{{ subject.description or '暂无描述' }}</p>
+                        {% set majors = subject.get_applicable_majors() %}
+                        {% if majors %}
+                        <div class="mt-2">
+                            <small class="text-muted">适用专业：</small>
+                            {% for major in majors %}
+                            <span class="badge bg-info me-1">{{ major }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="mt-2">
+                            <small class="text-muted">适用专业：全部</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <span class="badge bg-{{ 'success' if subject.is_active else 'danger' }}">
+                        {{ '启用' if subject.is_active else '禁用' }}
+                    </span>
+                </div>
+                <div class="mt-3">
+                    <span class="text-muted">题目数: {{ subject.questions.count() }}</span>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('admin.edit_subject', id=subject.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-pencil"></i> 编辑
+                </a>
+                <form action="{{ url_for('admin.delete_subject', id=subject.id) }}" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除？')">
+                        <i class="bi bi-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center text-muted py-5">
+        暂无学科
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

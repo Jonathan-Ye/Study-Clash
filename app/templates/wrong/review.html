@@ -1,0 +1,1514 @@
+{% extends "base.html" %}
+
+{% block title %}错题复习 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <!-- 移动端紧凑信息栏 -->
+    <div class="mobile-info-bar" id="mobile-info-bar">
+        <div class="mobile-info-item">
+            <i class="bi bi-list-ol"></i>
+            <span id="mobile-progress">1/{{ wrong_questions|length }}</span>
+        </div>
+        <div class="mobile-info-item">
+            <i class="bi bi-check-circle-fill"></i>
+            <span id="mobile-correct">0</span>
+        </div>
+        <div class="mobile-info-item">
+            <i class="bi bi-x-circle-fill"></i>
+            <span id="mobile-wrong">0</span>
+        </div>
+        <div class="mobile-info-item">
+            <i class="bi bi-star-fill"></i>
+            <span id="mobile-points">0</span>
+        </div>
+    </div>
+
+    <!-- 平板端侧边栏切换按钮 -->
+    <button class="sidebar-toggle-btn" id="sidebar-toggle" onclick="toggleSidebar()">
+        <i class="bi bi-layout-sidebar-reverse"></i>
+    </button>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- 双栏布局容器 -->
+    <div class="quiz-layout">
+        <!-- 主内容区 -->
+        <div class="quiz-main">
+            <div id="review-container">
+                {% for wrong in wrong_questions %}
+                {% set question_index = loop.index %}
+                {# 兼容WrongQuestion和Question两种数据结构 #}
+                {% if wrong.question_id is defined %}
+                    {# WrongQuestion对象 #}
+                    {% set question = wrong.question %}
+                    {% set wrong_id = wrong.id %}
+                {% else %}
+                    {# Question对象 #}
+                    {% set question = wrong %}
+                    {% set wrong_id = None %}
+                {% endif %}
+                <div class="question-card" id="question-{{ question_index }}" data-id="{{ question.id }}" data-wrong-id="{{ wrong_id if wrong_id else '' }}" data-subject="{{ question.subject_id }}" data-chapter="{{ question.chapter_id }}" style="display: {% if question_index == 1 %}block{% else %}none{% endif %};">
+                    <div class="question-body">
+                        <h3 class="question-title">
+                            <span class="question-number">{{ question_index }}.</span>
+                            {{ question.content }}
+                        </h3>
+                        
+                        <!-- 题型提示 -->
+                        <div class="question-type-hint {{ question.question_type }}">
+                            {% if question.question_type == 'single' %}
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span>请选择<strong>一个</strong>正确答案</span>
+                            {% elif question.question_type == 'multiple' %}
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span>请选择<strong>所有</strong>正确答案（多选）</span>
+                            {% else %}
+                            <i class="bi bi-info-circle-fill"></i>
+                            <span>请判断以下说法是否正确</span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="options-container{% if question.question_type == 'judge' %} judge-options{% elif question.question_type == 'multiple' %} multiple-options{% endif %}" id="options-{{ question_index }}">
+                            {% for option_key, option_value, option_image in question.get_options() %}
+                            <div class="option-item{% if question.question_type == 'judge' %} judge-option{% elif question.question_type == 'multiple' %} multiple-option{% endif %}" 
+                                 data-option="{{ option_key }}"
+                                 data-judge-value="{{ 'correct' if option_key == 'A' else 'wrong' if option_key == 'B' else '' }}"
+                                 onclick="selectOption(this, {{ question_index }})">
+                                <div class="option-selector">
+                                    <input type="{% if question.question_type == 'single' or question.question_type == 'judge' %}radio{% else %}checkbox{% endif %}" 
+                                           name="answer-{{ question_index }}" id="option-{{ question_index }}-{{ option_key }}" 
+                                           value="{{ option_key }}">
+                                    <span class="checkmark"></span>
+                                </div>
+                                <div class="option-content">
+                                    {% if question.question_type == 'judge' %}
+                                    <span class="judge-icon">
+                                        {% if option_key == 'A' %}
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        {% else %}
+                                        <i class="bi bi-x-circle-fill"></i>
+                                        {% endif %}
+                                    </span>
+                                    <span class="judge-text">{{ option_value }}</span>
+                                    {% else %}
+                                    <span class="option-letter">{{ option_key }}</span>
+                                    <div class="option-text-wrapper">
+                                        <span class="option-text">{{ option_value }}</span>
+                                        {% if option_image %}
+                                        <img src="{{ option_image }}" alt="选项图片" class="option-image">
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="result-area" id="result-{{ loop.index }}" style="display: none;"></div>
+                    </div>
+                    
+                    <div class="question-footer">
+                        <button class="btn-submit" id="submit-btn-{{ loop.index }}" onclick="submitReview()">
+                            <span class="btn-text">提交答案</span>
+                            <i class="bi bi-arrow-right-circle"></i>
+                        </button>
+                        <button class="btn-next" id="next-btn-{{ loop.index }}" onclick="nextQuestion()" style="display: none;">
+                            <span class="btn-text">下一题</span>
+                            <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div id="result-container" class="result-card" style="display: none;">
+                <div class="result-header">
+                    <div class="trophy-icon">
+                        <i class="bi bi-trophy-fill"></i>
+                    </div>
+                    <h2 class="result-status">复习完成！</h2>
+                </div>
+                
+                <div class="result-body">
+                    <div class="result-stats-grid">
+                        <div class="stat-card mastered">
+                            <div class="stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+                            <div class="stat-value" id="mastered-count">0</div>
+                            <div class="stat-label">已掌握</div>
+                        </div>
+                        <div class="stat-card still-wrong">
+                            <div class="stat-icon"><i class="bi bi-x-circle-fill"></i></div>
+                            <div class="stat-value" id="still-wrong">0</div>
+                            <div class="stat-label">仍错误</div>
+                        </div>
+                        <div class="stat-card correct">
+                            <div class="stat-icon"><i class="bi bi-hand-thumbs-up-fill"></i></div>
+                            <div class="stat-value" id="correct-count">0</div>
+                            <div class="stat-label">答对题数</div>
+                        </div>
+                        <div class="stat-card points">
+                            <div class="stat-icon"><i class="bi bi-star-fill"></i></div>
+                            <div class="stat-value" id="points-earned">0</div>
+                            <div class="stat-label">获得积分</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="result-footer">
+                    <a href="{{ url_for('wrong.dashboard') }}" class="btn-back">
+                        <i class="bi bi-arrow-left"></i>
+                        <span>返回错题本</span>
+                    </a>
+                    <a href="{{ url_for('wrong.review') }}" class="btn-continue">
+                        <i class="bi bi-arrow-repeat"></i>
+                        <span>继续复习</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 侧边栏 -->
+        <aside class="quiz-sidebar" id="quiz-sidebar">
+            <div class="sidebar-inner">
+
+                <!-- 复习进度区 -->
+                <div class="sidebar-section sidebar-progress-section">
+                    <div class="sidebar-question-progress">
+                        <span>第 <strong id="sidebar-current-num">1</strong> / <span id="sidebar-total-num">{{ wrong_questions|length }}</span> 题</span>
+                    </div>
+                    <div class="sidebar-stats-row">
+                        <div class="sidebar-stat-item correct">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span id="sidebar-correct-badge">0</span>
+                        </div>
+                        <div class="sidebar-stat-item wrong">
+                            <i class="bi bi-x-circle-fill"></i>
+                            <span id="sidebar-wrong-badge">0</span>
+                        </div>
+                        <div class="sidebar-stat-item points">
+                            <i class="bi bi-star-fill"></i>
+                            <span id="sidebar-points-badge">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 筛选区 -->
+                <div class="sidebar-section sidebar-filter-section">
+                    <div class="sidebar-section-title">
+                        <i class="bi bi-funnel"></i> 筛选复习
+                    </div>
+                    <div class="sidebar-filter-group">
+                        <label class="sidebar-filter-label">学科</label>
+                        <select class="sidebar-filter-select" id="subject-filter" onchange="filterBySubject()">
+                            <option value="">全部学科</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="sidebar-filter-group">
+                        <label class="sidebar-filter-label">章节</label>
+                        <select class="sidebar-filter-select" id="chapter-filter" onchange="filterByChapter()">
+                            <option value="">全部章节</option>
+                        </select>
+                    </div>
+                    <div class="sidebar-filter-info">
+                        <span id="filter-count">当前显示: {{ wrong_questions|length }} 道错题</span>
+                    </div>
+                </div>
+
+                <!-- 题目信息区 -->
+                <div class="sidebar-section sidebar-info-section">
+                    <div class="sidebar-section-title">
+                        <i class="bi bi-book"></i> 题目信息
+                    </div>
+                    <div class="sidebar-question-info" id="sidebar-question-info">
+                        <div class="sidebar-question-meta">
+                            {% set first_wrong = wrong_questions[0] if wrong_questions else None %}
+                            {% set first_question = first_wrong.question if first_wrong else None %}
+                            {% if first_question %}
+                            <span class="badge type-badge {{ first_question.question_type }}">
+                                {{ '单选题' if first_question.question_type == 'single' else '多选题' if first_question.question_type == 'multiple' else '判断题' if first_question.question_type == 'judge' else '单选题' }}
+                            </span>
+                            <span class="badge difficulty-badge level-{{ first_question.difficulty }}">
+                                难度 {{ first_question.difficulty }}
+                            </span>
+                            {% else %}
+                            <span class="badge type-badge single">单选题</span>
+                            <span class="badge difficulty-badge level-1">难度 1</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="sidebar-feedback-btn">
+                        <button class="btn-feedback" onclick="openFeedbackForCurrentWrongQuestion()">
+                            <i class="bi bi-flag-fill"></i>
+                            <span>反馈题目问题</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 提示信息区 -->
+                <div class="sidebar-section sidebar-info-section">
+                    <div class="sidebar-info-item">
+                        <i class="bi bi-info-circle"></i>
+                        <span>连续答对 <strong>{{ config.consecutive_correct_required }}</strong> 次才算掌握</span>
+                    </div>
+                    <div class="sidebar-info-item">
+                        <i class="bi bi-gift"></i>
+                        <span>掌握后获得 <strong>{{ config.review_points }}</strong> 积分</span>
+                    </div>
+                    <div class="sidebar-info-actions">
+                        <a href="{{ url_for('wrong.dashboard') }}" class="btn-back-small">
+                            <i class="bi bi-arrow-left"></i> 返回
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+    </div>
+</div>
+
+{% include 'components/feedback_modal.html' %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 答题容器 */
+.quiz-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 双栏布局 */
+.quiz-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.quiz-main {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 侧边栏 */
+.quiz-sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+}
+
+.sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* 侧边栏分区 */
+.sidebar-section {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.sidebar-section-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 复习进度区 */
+.sidebar-question-progress {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 14px;
+    text-align: center;
+}
+
+.sidebar-question-progress strong {
+    color: #667eea;
+    font-size: 1.3rem;
+}
+
+.sidebar-stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.sidebar-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.sidebar-stat-item.correct { color: #10b981; }
+.sidebar-stat-item.wrong { color: #ef4444; }
+.sidebar-stat-item.points { color: #f59e0b; }
+
+/* 筛选区 */
+.sidebar-filter-group {
+    margin-bottom: 12px;
+}
+
+.sidebar-filter-label {
+    display: block;
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.sidebar-filter-select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #374151;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.sidebar-filter-select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.sidebar-filter-info {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #f3f4f6;
+    font-size: 0.8rem;
+    color: #9ca3af;
+}
+
+/* 提示信息区 */
+.sidebar-info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6b7280;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.sidebar-info-item:last-of-type {
+    margin-bottom: 0;
+}
+
+.sidebar-info-item i { color: #667eea; flex-shrink: 0; }
+.sidebar-info-item strong { color: #1f2937; }
+
+.sidebar-question-info {
+    margin-bottom: 12px;
+}
+
+.sidebar-question-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sidebar-feedback-btn {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.btn-feedback {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+    border: 1.5px solid #ef4444;
+    border-radius: 10px;
+    color: #dc2626;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-feedback:hover {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-feedback:active {
+    transform: translateY(0);
+}
+
+.btn-feedback i {
+    font-size: 1rem;
+}
+
+.sidebar-info-actions {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.btn-back-small {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #f3f4f6;
+    color: #374151;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-back-small:hover {
+    background: #e5e7eb;
+    color: #1f2937;
+}
+
+/* 题目卡片 */
+.question-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    animation: slideIn 0.4s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.question-body {
+    padding: 30px 24px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.question-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    line-height: 1.7;
+    margin-bottom: 24px;
+}
+
+.question-number {
+    color: #667eea;
+    font-weight: 700;
+    margin-right: 8px;
+}
+
+.question-type-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.question-type-hint i { font-size: 1rem; }
+.question-type-hint strong { font-weight: 700; }
+
+.question-type-hint.single {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    color: #5a67d8;
+    border-left: 4px solid #667eea;
+}
+
+.question-type-hint.multiple {
+    background: linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(45, 206, 137, 0.1) 100%);
+    color: #0d9488;
+    border-left: 4px solid #11998e;
+}
+
+.question-type-hint.judge {
+    background: linear-gradient(135deg, rgba(240, 147, 251, 0.1) 0%, rgba(245, 87, 108, 0.1) 100%);
+    color: #db2777;
+    border-left: 4px solid #f093fb;
+}
+
+/* 选项样式 */
+.options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.option-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: #f9fafb;
+    border: 2px solid #e5e7eb;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.option-item:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+    transform: translateX(5px);
+}
+
+.option-item.selected {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.option-item.correct {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.option-item.wrong {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.option-selector {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.option-selector input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.option-item.selected .checkmark {
+    background: #667eea;
+    border-color: #667eea;
+}
+
+.option-item.selected .checkmark::after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 3px;
+    width: 6px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.option-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.option-letter {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 700;
+    border-radius: 8px;
+    font-size: 0.95rem;
+}
+
+.option-text {
+    font-size: 1rem;
+    color: #374151;
+    line-height: 1.5;
+}
+
+.option-text-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+/* 多选题方形选择器 */
+.multiple-option .checkmark {
+    border-radius: 6px;
+}
+
+.multiple-option.selected .checkmark::after {
+    left: 7px;
+    top: 3px;
+    width: 6px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.multiple-option .option-letter {
+    background: linear-gradient(135deg, #11998e 0%, #2dce89 100%);
+}
+
+.multiple-option:hover {
+    border-color: #11998e;
+    background: rgba(17, 153, 142, 0.05);
+}
+
+.multiple-option.selected {
+    border-color: #11998e;
+    background: rgba(17, 153, 142, 0.1);
+}
+
+.multiple-option.selected .checkmark {
+    background: #11998e;
+    border-color: #11998e;
+}
+
+/* 判断题特殊样式 */
+.judge-options {
+    flex-direction: row;
+    gap: 20px;
+}
+
+.judge-option {
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    border-radius: 16px;
+    gap: 12px;
+}
+
+.judge-option .option-selector { display: none; }
+
+.judge-option .option-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.judge-icon {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 2rem;
+    transition: all 0.3s ease;
+}
+
+.judge-option[data-judge-value="correct"] .judge-icon {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+    color: #10b981;
+    border: 3px solid #10b981;
+}
+
+.judge-option[data-judge-value="wrong"] .judge-icon {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
+    color: #ef4444;
+    border: 3px solid #ef4444;
+}
+
+.judge-text {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #374151;
+}
+
+.judge-option[data-judge-value="correct"]:hover {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+    transform: translateY(-3px);
+}
+
+.judge-option[data-judge-value="wrong"]:hover {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+    transform: translateY(-3px);
+}
+
+.judge-option[data-judge-value="correct"].selected {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+}
+
+.judge-option[data-judge-value="wrong"].selected {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+}
+
+.judge-option[data-judge-value="correct"].selected .judge-icon {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    transform: scale(1.1);
+}
+
+.judge-option[data-judge-value="wrong"].selected .judge-icon {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    transform: scale(1.1);
+}
+
+.judge-option.correct {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.2);
+}
+
+.judge-option.wrong {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.result-area {
+    margin-top: 20px;
+}
+
+.result-area .alert {
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+}
+
+/* 提交/下一题按钮 sticky */
+.question-footer {
+    padding: 20px 24px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.btn-submit {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 32px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+}
+
+.btn-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-next {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 32px;
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.btn-next:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5);
+}
+
+/* 移动端紧凑信息栏 */
+.mobile-info-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    color: white;
+    gap: 8px;
+}
+
+.mobile-info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* 平板端侧边栏切换按钮 */
+.sidebar-toggle-btn {
+    display: none;
+    position: fixed;
+    right: 16px;
+    top: 70px;
+    z-index: 1060;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s ease;
+}
+
+.sidebar-toggle-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1040;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.show {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+/* 结果卡片 */
+.result-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    animation: slideIn 0.5s ease;
+}
+
+.result-header {
+    text-align: center;
+    padding: 40px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.trophy-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.result-status {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.result-body {
+    padding: 40px;
+}
+
+.result-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+
+.stat-card {
+    text-align: center;
+    padding: 24px;
+    border-radius: 16px;
+    background: #f9fafb;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.stat-card.mastered { background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(52, 211, 153, 0.1) 100%); }
+.stat-card.still-wrong { background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(248, 113, 113, 0.1) 100%); }
+.stat-card.correct { background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(96, 165, 250, 0.1) 100%); }
+.stat-card.points { background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(251, 191, 36, 0.1) 100%); }
+
+.stat-icon { font-size: 2rem; margin-bottom: 12px; }
+.stat-card.mastered .stat-icon { color: #10b981; }
+.stat-card.still-wrong .stat-icon { color: #ef4444; }
+.stat-card.correct .stat-icon { color: #3b82f6; }
+.stat-card.points .stat-icon { color: #f59e0b; }
+
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #1f2937;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    font-size: 0.95rem;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.result-footer {
+    padding: 20px 40px 40px;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+
+.btn-back, .btn-continue {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 32px;
+    text-decoration: none;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-back {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.btn-back:hover {
+    background: #e5e7eb;
+    color: #1f2937;
+    transform: translateY(-2px);
+}
+
+.btn-continue {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-continue:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+    color: white;
+}
+
+/* 动画 */
+@keyframes slideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+/* ===== 响应式 ===== */
+
+/* 平板端 (768px-991px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .quiz-layout {
+        flex-direction: column;
+    }
+
+    .quiz-sidebar {
+        width: 100%;
+        position: static;
+        max-height: none;
+        display: none;
+    }
+
+    .quiz-sidebar.show {
+        display: block;
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 320px;
+        z-index: 1050;
+        overflow-y: auto;
+        background: #f8f9fa;
+        padding: 20px;
+        animation: slideInRight 0.3s ease;
+        box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    }
+
+    .sidebar-toggle-btn {
+        display: flex;
+    }
+
+    .mobile-info-bar {
+        display: none !important;
+    }
+}
+
+/* 移动端 (<768px) */
+@media (max-width: 767.98px) {
+    .quiz-container {
+        padding: 10px;
+    }
+
+    .quiz-layout {
+        flex-direction: column;
+    }
+
+    .quiz-sidebar {
+        display: none !important;
+    }
+
+    .mobile-info-bar {
+        display: flex;
+    }
+
+    .sidebar-toggle-btn {
+        display: none !important;
+    }
+
+    .question-title {
+        font-size: 1.1rem;
+    }
+
+    .option-item {
+        padding: 14px 16px;
+    }
+
+    .result-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .result-footer {
+        flex-direction: column;
+    }
+}
+
+/* 超小屏幕 (<480px) */
+@media (max-width: 480px) {
+    .mobile-info-item {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentIndex = 1;
+let totalQuestions = {{ wrong_questions|length }};
+let masteredCount = 0;
+let stillWrongCount = 0;
+let correctCount = 0;
+let totalPoints = 0;
+let consecutiveRequired = {{ config.consecutive_correct_required }};
+let allQuestions = [];
+let filteredQuestions = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.question-card').forEach((card, index) => {
+        allQuestions.push({
+            element: card,
+            id: card.dataset.id,
+            subjectId: card.dataset.subject,
+            chapterId: card.dataset.chapter
+        });
+    });
+    filteredQuestions = [...allQuestions];
+});
+
+function filterBySubject() {
+    const subjectId = document.getElementById('subject-filter').value;
+    const chapterSelect = document.getElementById('chapter-filter');
+    
+    chapterSelect.innerHTML = '<option value="">全部章节</option>';
+    
+    if (subjectId) {
+        fetch(`/wrong/api/chapters-by-subject/${subjectId}`)
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(chapter => {
+                    const indent = '—'.repeat(chapter.level - 1);
+                    chapterSelect.innerHTML += `<option value="${chapter.id}">${indent}${chapter.name}</option>`;
+                });
+            });
+    }
+    
+    applyFilters();
+}
+
+function filterByChapter() {
+    applyFilters();
+}
+
+function applyFilters() {
+    const subjectId = document.getElementById('subject-filter').value;
+    const chapterId = document.getElementById('chapter-filter').value;
+    
+    filteredQuestions = allQuestions.filter(q => {
+        if (subjectId && q.subjectId !== subjectId) return false;
+        if (chapterId && q.chapterId !== chapterId) return false;
+        return true;
+    });
+    
+    allQuestions.forEach(q => q.element.style.display = 'none');
+    
+    if (filteredQuestions.length > 0) {
+        currentIndex = 1;
+        filteredQuestions[0].element.style.display = 'block';
+        // 更新侧边栏
+        const sidebarCurrentNum = document.getElementById('sidebar-current-num');
+        const sidebarTotalNum = document.getElementById('sidebar-total-num');
+        if (sidebarCurrentNum) sidebarCurrentNum.textContent = 1;
+        if (sidebarTotalNum) sidebarTotalNum.textContent = filteredQuestions.length;
+        // 更新筛选计数
+        document.getElementById('filter-count').textContent = `当前显示: ${filteredQuestions.length} 道错题`;
+    } else {
+        const sidebarCurrentNum = document.getElementById('sidebar-current-num');
+        const sidebarTotalNum = document.getElementById('sidebar-total-num');
+        if (sidebarCurrentNum) sidebarCurrentNum.textContent = 0;
+        if (sidebarTotalNum) sidebarTotalNum.textContent = 0;
+        document.getElementById('filter-count').textContent = '没有符合条件的错题';
+    }
+}
+
+function selectOption(element, questionIndex) {
+    const input = element.querySelector('input');
+    if (!input) return;
+    
+    const container = document.getElementById(`options-${questionIndex}`);
+    if (!container) return;
+    
+    // 通过input type判断题型(与单人/多人挑战完全一致)
+    const isRadio = input.type === 'radio';
+    
+    console.log(`[selectOption] 题目${questionIndex}:`, {
+        input类型: input.type,
+        是否单选: isRadio,
+        当前选中: input.checked,
+        容器类名: container.className
+    });
+    
+    if (isRadio) {
+        // 单选题/判断题:只能选一个,清除所有radio input
+        const allInputs = container.querySelectorAll('input[type="radio"]');
+        console.log(`[selectOption] 找到${allInputs.length}个radio input`);
+        
+        allInputs.forEach(radioInput => {
+            radioInput.checked = false;
+            const parentItem = radioInput.closest('.option-item');
+            if (parentItem) parentItem.classList.remove('selected');
+        });
+        
+        // 设置当前选项为选中
+        input.checked = true;
+        element.classList.add('selected');
+        console.log(`[selectOption] 单选题模式,已选中:`, element.dataset.option);
+    } else {
+        // 多选题:可以选多个,切换当前选项
+        input.checked = !input.checked;
+        element.classList.toggle('selected', input.checked);
+        console.log(`[selectOption] 多选题模式,当前选项:`, element.dataset.option, '选中状态:', input.checked);
+    }
+}
+
+function submitReview() {
+    const currentQuestion = filteredQuestions[currentIndex - 1];
+    if (!currentQuestion) return;
+    
+    const options = currentQuestion.element.querySelectorAll('.option-item input:checked');
+    if (options.length === 0) {
+        alert('请选择答案');
+        return;
+    }
+    
+    const answer = Array.from(options).map(o => o.value).join(',');
+    const cardId = currentQuestion.id;
+    
+    const submitBtn = currentQuestion.element.querySelector('.btn-submit');
+    submitBtn.disabled = true;
+    
+    // 根据ID类型判断是普通模式还是智能推荐模式
+    const submitData = { answer: answer };
+    if (cardId && !isNaN(cardId)) {
+        // 检查是否有wrong_question_id（普通模式）
+        const wrongId = currentQuestion.element.dataset.wrongId;
+        if (wrongId) {
+            submitData.wrong_question_id = wrongId;
+        } else {
+            submitData.question_id = cardId;
+        }
+    }
+    
+    console.log('提交复习答案:', submitData);
+    
+    fetch('/wrong/api/submit-review', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(submitData)
+    })
+    .then(response => {
+        console.log('响应状态:', response.status);
+        const contentType = response.headers.get('content-type');
+        
+        if (!contentType || !contentType.includes('application/json')) {
+            return response.text().then(html => {
+                console.error('收到非JSON响应:', html.substring(0, 200));
+                if (response.status === 401 || html.includes('登录')) {
+                    throw new Error('请先登录');
+                } else if (response.status === 404) {
+                    throw new Error('提交接口不存在');
+                } else {
+                    throw new Error('服务器返回非JSON响应');
+                }
+            });
+        }
+        
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.error || `HTTP error: ${response.status}`);
+            }).catch(jsonErr => {
+                throw new Error(`HTTP ${response.status}: 请求失败`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('提交结果:', data);
+        
+        if (data.error) {
+            alert(data.error);
+            submitBtn.disabled = false;
+            return;
+        }
+        
+        showResult(data, currentQuestion.element);
+        
+        if (data.is_correct) {
+            correctCount++;
+            if (data.is_mastered) {
+                masteredCount++;
+            }
+            totalPoints += data.points_earned;
+        } else {
+            stillWrongCount++;
+        }
+        
+        updateStats();
+        
+        submitBtn.style.display = 'none';
+        currentQuestion.element.querySelector('.btn-next').style.display = 'flex';
+    })
+    .catch(error => {
+        console.error('提交复习答案失败:', error);
+        alert('提交失败: ' + error.message);
+        submitBtn.disabled = false;
+    });
+}
+
+function showResult(data, questionElement) {
+    const options = questionElement.querySelectorAll('.option-item');
+    options.forEach(option => {
+        const optionKey = option.dataset.option;
+        const input = option.querySelector('input');
+        
+        if (data.correct_answer.includes(optionKey)) {
+            option.classList.add('correct');
+            option.classList.remove('selected');
+        }
+        
+        if (input.checked && !data.is_correct) {
+            option.classList.add('wrong');
+            option.classList.remove('selected');
+        }
+        
+        input.disabled = true;
+        option.style.pointerEvents = 'none';
+    });
+    
+    const resultArea = questionElement.querySelector('.result-area');
+    resultArea.style.display = 'block';
+    
+    let resultHtml = `
+        <div class="alert alert-${data.is_correct ? 'success' : 'danger'}">
+            <strong>${data.is_correct ? '✓ 回答正确！' : '✗ 回答错误'}</strong>
+            ${data.is_mastered ? '<br><span class="badge bg-success">恭喜！已掌握此题！</span>' : ''}
+            ${!data.is_mastered && data.is_correct ? `<br><small>连续正确: ${data.consecutive_correct}/${consecutiveRequired}</small>` : ''}
+            ${data.next_review_at ? `<br><small>下次复习: ${data.next_review_at}</small>` : ''}
+            ${data.points_earned > 0 ? `<br><small class="text-success">+${data.points_earned} 积分</small>` : ''}
+        </div>
+    `;
+    
+    if (!data.is_correct) {
+        resultHtml += `
+            <div class="alert alert-info">
+                <strong>正确答案：</strong>${data.correct_answer}<br>
+                <strong>解析：</strong>${data.analysis || '暂无解析'}
+            </div>
+        `;
+        
+        if (data.similar_questions && data.similar_questions.length > 0) {
+            resultHtml += `
+                <div class="alert alert-warning">
+                    <i class="bi bi-lightning"></i> 建议复习相似题目加强练习
+                </div>
+            `;
+        }
+    }
+    
+    resultArea.innerHTML = resultHtml;
+}
+
+function updateStats() {
+    // 更新侧边栏
+    const sidebarCorrect = document.getElementById('sidebar-correct-badge');
+    const sidebarWrong = document.getElementById('sidebar-wrong-badge');
+    const sidebarPoints = document.getElementById('sidebar-points-badge');
+    if (sidebarCorrect) sidebarCorrect.textContent = correctCount;
+    if (sidebarWrong) sidebarWrong.textContent = stillWrongCount;
+    if (sidebarPoints) sidebarPoints.textContent = totalPoints;
+    
+    // 更新移动端
+    const mobileCorrect = document.getElementById('mobile-correct');
+    const mobileWrong = document.getElementById('mobile-wrong');
+    const mobilePoints = document.getElementById('mobile-points');
+    if (mobileCorrect) mobileCorrect.textContent = correctCount;
+    if (mobileWrong) mobileWrong.textContent = stillWrongCount;
+    if (mobilePoints) mobilePoints.textContent = totalPoints;
+}
+
+function nextQuestion() {
+    const currentQuestion = filteredQuestions[currentIndex - 1];
+    if (currentQuestion) {
+        currentQuestion.element.style.display = 'none';
+    }
+    
+    currentIndex++;
+    
+    if (currentIndex <= filteredQuestions.length) {
+        filteredQuestions[currentIndex - 1].element.style.display = 'block';
+        // 更新侧边栏进度
+        const sidebarCurrentNum = document.getElementById('sidebar-current-num');
+        if (sidebarCurrentNum) sidebarCurrentNum.textContent = currentIndex;
+        // 更新移动端进度
+        const mobileProgress = document.getElementById('mobile-progress');
+        if (mobileProgress) mobileProgress.textContent = currentIndex + '/' + filteredQuestions.length;
+    } else {
+        finishReview();
+    }
+}
+
+function openFeedbackForCurrentWrongQuestion() {
+    const currentQuestion = filteredQuestions[currentIndex - 1];
+    if (currentQuestion && currentQuestion.id) {
+        openFeedbackModal(parseInt(currentQuestion.id));
+    } else {
+        alert('无法获取题目信息');
+    }
+}
+
+function finishReview() {
+    document.getElementById('review-container').style.display = 'none';
+    document.getElementById('result-container').style.display = 'block';
+    // 隐藏侧边栏
+    const sidebar = document.getElementById('quiz-sidebar');
+    if (sidebar) sidebar.style.display = 'none';
+    document.getElementById('mastered-count').textContent = masteredCount;
+    document.getElementById('still-wrong').textContent = stillWrongCount;
+    document.getElementById('correct-count').textContent = correctCount;
+    document.getElementById('points-earned').textContent = totalPoints;
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('quiz-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const isOpen = sidebar.classList.contains('show');
+
+    if (isOpen) {
+        sidebar.classList.remove('show');
+        overlay.classList.remove('show');
+    } else {
+        sidebar.classList.add('show');
+        overlay.classList.add('show');
+    }
+}
+</script>
+{% endblock %}

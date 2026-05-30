@@ -1,0 +1,536 @@
+{% extends "admin/base.html" %}
+
+{% block title %}AI服务商配置 - 管理后台{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+<style>
+.provider-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+    height: 100%;
+}
+.provider-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102,126,234,0.15);
+    transform: translateY(-2px);
+}
+.provider-card.selected {
+    border-color: #667eea;
+    background: linear-gradient(135deg, rgba(102,126,234,0.08) 0%, rgba(118,75,162,0.08) 100%);
+    box-shadow: 0 4px 16px rgba(102,126,234,0.2);
+}
+.provider-card .provider-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 10px;
+    font-size: 1.5rem;
+    color: #fff;
+}
+.provider-card .provider-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #374151;
+}
+.provider-card .provider-desc {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+.provider-table td { vertical-align: middle; }
+.status-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+}
+.status-dot.active { background: #22c55e; }
+.status-dot.inactive { background: #d1d5db; }
+.primary-badge {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+}
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-robot"></i> AI大模型配置</h4>
+    </div>
+
+    <!-- 已配置的服务商列表 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border-radius:8px 8px 0 0">
+            <span><i class="bi bi-hdd-network"></i> 已配置的服务商</span>
+            <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addProviderModal">
+                <i class="bi bi-plus-lg"></i> 添加服务商
+            </button>
+        </div>
+        <div class="card-body p-0">
+            {% if providers %}
+            <div class="table-responsive provider-table">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:40px"></th>
+                            <th>名称</th>
+                            <th>类型</th>
+                            <th>模型</th>
+                            <th>API密钥</th>
+                            <th>状态</th>
+                            <th style="width:200px">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in providers %}
+                        <tr>
+                            <td>
+                                {% if p.is_primary %}
+                                <span class="primary-badge">主</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ p.name }}</strong></td>
+                            <td>
+                                {% set type_colors = {'local':'bg-dark','zhipuai':'bg-info','baidu':'bg-primary','alibaba':'bg-warning text-dark'} %}
+                                <span class="badge {{ type_colors.get(p.provider_type, 'bg-secondary') }}">
+                                    {{ provider_type_names.get(p.provider_type, p.provider_type) }}
+                                </span>
+                            </td>
+                            <td><code>{{ p.model_name }}</code></td>
+                            <td><code class="small">{{ p.api_key_masked }}</code>
+                                {% if p.needs_rekey %}
+                                <span class="badge bg-danger ms-1">密钥失效-需重新配置</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="status-dot {{ 'active' if p.is_active else 'inactive' }}"></span>
+                                {{ '启用' if p.is_active else '禁用' }}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-info" onclick="testProvider({{ p.id }})" title="测试连通性">
+                                        <i class="bi bi-wifi"></i>
+                                    </button>
+                                    {% if not p.is_primary %}
+                                    <form method="post" action="{{ url_for('admin.ai_provider_set_primary', provider_id=p.id) }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button class="btn btn-outline-warning" type="submit" title="设为主服务商">
+                                            <i class="bi bi-star"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <form method="post" action="{{ url_for('admin.ai_provider_delete', provider_id=p.id) }}" class="d-inline" onsubmit="return confirm('确定删除 {{ p.name }}？')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button class="btn btn-outline-danger" type="submit" title="删除">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-cloud-plus" style="font-size:3rem;color:#d1d5db"></i>
+                <p class="text-muted mt-2 mb-1">暂无大模型服务商</p>
+                <small class="text-muted">点击上方"添加服务商"开始配置</small>
+            </div>
+            {% endif %}
+        </div>
+        {% if providers %}
+        <div class="card-footer bg-light">
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i>
+                系统将按 <strong>主→备</strong> 顺序自动降级调用。设置主服务商后，当主服务商不可用时自动切换到备用。
+            </small>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- AI功能开关控制 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);color:#fff;border-radius:8px 8px 0 0">
+            <span><i class="bi bi-toggles"></i> AI功能开关</span>
+        </div>
+        <div class="card-body" id="switchPanel">
+            <div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> 加载中...</div>
+        </div>
+        <div class="card-footer bg-light">
+            <small class="text-muted"><i class="bi bi-info-circle"></i> 关闭后学生端对应功能将显示"维护中"提示，不影响管理员查看</small>
+        </div>
+    </div>
+</div>
+
+<!-- 添加服务商模态框 - Cherry Studio风格 -->
+<div class="modal fade" id="addProviderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('admin.ai_provider_add') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff">
+                    <h5 class="modal-title"><i class="bi bi-cloud-plus"></i> 添加大模型服务商</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Step 1: 选择服务商类型 -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold mb-3">
+                            <span class="badge bg-secondary me-1">1</span> 选择服务商
+                        </label>
+                        <div class="row g-3">
+                            <div class="col-6 col-md-3">
+                                <div class="provider-card" data-type="zhipuai" onclick="selectProvider(this, 'zhipuai')">
+                                    <div class="provider-icon" style="background:linear-gradient(135deg,#4f46e5,#7c3aed)">
+                                        <i class="bi bi-chat-dots-fill"></i>
+                                    </div>
+                                    <div class="provider-label">智谱AI</div>
+                                    <div class="provider-desc">GLM-4 系列</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="provider-card" data-type="baidu" onclick="selectProvider(this, 'baidu')">
+                                    <div class="provider-icon" style="background:linear-gradient(135deg,#2563eb,#3b82f6)">
+                                        <i class="bi bi-braces-asterisk"></i>
+                                    </div>
+                                    <div class="provider-label">百度千帆</div>
+                                    <div class="provider-desc">文心大模型</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="provider-card" data-type="alibaba" onclick="selectProvider(this, 'alibaba')">
+                                    <div class="provider-icon" style="background:linear-gradient(135deg,#f97316,#ea580c)">
+                                        <i class="bi bi-lightning-fill"></i>
+                                    </div>
+                                    <div class="provider-label">阿里百炼</div>
+                                    <div class="provider-desc">通义千问</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="provider-card" data-type="local" onclick="selectProvider(this, 'local')">
+                                    <div class="provider-icon" style="background:linear-gradient(135deg,#374151,#1f2937)">
+                                        <i class="bi bi-hdd-rack-fill"></i>
+                                    </div>
+                                    <div class="provider-label">本地部署</div>
+                                    <div class="provider-desc">Ollama / vLLM</div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" name="provider_type" id="selectedType" required>
+                    </div>
+
+                    <!-- Step 2: 配置密钥 -->
+                    <div id="configSection" style="display:none">
+                        <label class="form-label fw-bold mb-3">
+                            <span class="badge bg-secondary me-1">2</span> 填写配置
+                        </label>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">API密钥 <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" name="api_key" id="apiKeyInput" required placeholder="粘贴你的 API Key">
+                                <div class="form-text" id="apiKeyHint"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">模型名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="model_name" id="modelNameInput" required placeholder="输入模型名称">
+                                <div class="form-text" id="modelHint"></div>
+                                <!-- 推荐模型快捷按钮 -->
+                                <div id="modelSuggestions" class="mt-1" style="display:none"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">服务商名称</label>
+                                <input type="text" class="form-control" name="name" id="providerNameInput" placeholder="给服务商起个名字">
+                            </div>
+                            <div class="col-md-6" id="baseUrlGroup" style="display:none">
+                                <label class="form-label">API地址</label>
+                                <input type="text" class="form-control" name="api_base_url" id="baseUrlInput" placeholder="http://localhost:11434">
+                                <div class="form-text" id="baseUrlHint"></div>
+                            </div>
+                        </div>
+
+                        <!-- 高级设置折叠 -->
+                        <div class="mt-3">
+                            <a class="text-muted small" data-bs-toggle="collapse" href="#advancedSettings" role="button">
+                                <i class="bi bi-gear"></i> 高级设置 <i class="bi bi-chevron-down"></i>
+                            </a>
+                            <div class="collapse mt-2" id="advancedSettings">
+                                <div class="card card-body bg-light">
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label form-label-sm">最大Token</label>
+                                            <input type="number" class="form-control form-control-sm" name="max_tokens" value="8192" min="100">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label form-label-sm">温度参数</label>
+                                            <input type="number" class="form-control form-control-sm" name="temperature" value="0.7" min="0" max="2" step="0.1">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label form-label-sm">优先级</label>
+                                            <input type="number" class="form-control form-control-sm" name="priority" value="0" min="0">
+                                            <small class="text-muted">数字越小越优先</small>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" name="is_active" value="on" checked id="isActiveCheck2">
+                                                <label class="form-check-label" for="isActiveCheck2">启用</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" name="is_primary" value="on" id="isPrimaryCheck2">
+                                                <label class="form-check-label" for="isPrimaryCheck2">设为主服务商</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                        <i class="bi bi-check-lg"></i> 添加
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+const providerConfigs = {
+    zhipuai: {
+        name: '智谱AI',
+        defaultModel: 'glm-4-flash',
+        models: [
+            {value: 'glm-4-flash', label: 'GLM-4-Flash (免费快速)', maxTokens: 4096},
+            {value: 'glm-4', label: 'GLM-4 (标准)', maxTokens: 8192},
+            {value: 'glm-4-plus', label: 'GLM-4-Plus (高级)', maxTokens: 8192},
+            {value: 'glm-4-long', label: 'GLM-4-Long (长文本)', maxTokens: 16384},
+        ],
+        apiKeyHint: '在 open.bigmodel.cn 控制台获取 API Key',
+        modelHint: '推荐 glm-4-flash，免费且响应快',
+        needsBaseUrl: true,
+        defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    },
+    baidu: {
+        name: '百度千帆',
+        defaultModel: 'ernie-bot-4',
+        models: [
+            {value: 'ernie-bot-4', label: 'ERNIE-Bot-4 (高级)', maxTokens: 8192},
+            {value: 'ernie-bot-turbo', label: 'ERNIE-Bot-Turbo (快速)', maxTokens: 4096},
+            {value: 'ernie-bot', label: 'ERNIE-Bot (标准)', maxTokens: 4096},
+        ],
+        apiKeyHint: '在千帆控制台创建应用获取 API Key',
+        modelHint: '需要开通对应模型的访问权限',
+        needsBaseUrl: true,
+        defaultBaseUrl: 'https://qianfan.baidubce.com/v2',
+    },
+    alibaba: {
+        name: '阿里百炼',
+        defaultModel: 'qwen-turbo',
+        models: [
+            {value: 'qwen-turbo', label: 'Qwen-Turbo (快速)', maxTokens: 8192},
+            {value: 'qwen-plus', label: 'Qwen-Plus (标准)', maxTokens: 8192},
+            {value: 'qwen-max', label: 'Qwen-Max (高级)', maxTokens: 8192},
+        ],
+        apiKeyHint: '在百炼控制台获取 API Key',
+        modelHint: 'Qwen-Turbo 性价比最高',
+        needsBaseUrl: true,
+        defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    },
+    local: {
+        name: '本地部署',
+        defaultModel: 'qwen2.5:7b',
+        models: [
+            {value: 'qwen2.5:7b', label: 'Qwen2.5-7B (Ollama)', maxTokens: 8192},
+            {value: 'qwen2.5:14b', label: 'Qwen2.5-14B (Ollama)', maxTokens: 8192},
+            {value: 'deepseek-r1:7b', label: 'DeepSeek-R1-7B (Ollama)', maxTokens: 16384},
+            {value: 'custom', label: '自定义模型...', maxTokens: 8192},
+        ],
+        apiKeyHint: '本地部署通常无需密钥，留空即可',
+        modelHint: '需先安装 Ollama 并拉取模型',
+        needsBaseUrl: true,
+        defaultBaseUrl: 'http://localhost:11434/v1',
+    },
+};
+
+let selectedProviderType = null;
+
+function selectProvider(el, type) {
+    // Update visual selection
+    document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+
+    selectedProviderType = type;
+    document.getElementById('selectedType').value = type;
+    document.getElementById('configSection').style.display = 'block';
+    document.getElementById('submitBtn').disabled = false;
+
+    const config = providerConfigs[type];
+
+    // Auto-fill provider name
+    const nameInput = document.getElementById('providerNameInput');
+    nameInput.value = config.name;
+    nameInput.placeholder = config.name;
+
+    // Auto-fill model suggestions as quick-select buttons
+    const modelNameInput = document.getElementById('modelNameInput');
+    const suggestionsDiv = document.getElementById('modelSuggestions');
+    suggestionsDiv.innerHTML = '';
+    suggestionsDiv.style.display = 'block';
+    config.models.forEach(m => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-outline-secondary btn-sm me-1 mb-1';
+        btn.textContent = m.label;
+        btn.title = 'Max Token: ' + (m.maxTokens || 8192);
+        btn.onclick = function(e) {
+            e.preventDefault();
+            modelNameInput.value = m.value;
+            // Highlight selected
+            suggestionsDiv.querySelectorAll('.btn').forEach(b => {
+                b.classList.remove('btn-primary');
+                b.classList.add('btn-outline-secondary');
+            });
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-primary');
+            // Update max_tokens
+            const maxTokensInput = document.querySelector('input[name="max_tokens"]');
+            if (maxTokensInput) maxTokensInput.value = m.maxTokens || 8192;
+        };
+        suggestionsDiv.appendChild(btn);
+    });
+
+    // Auto-select default model
+    modelNameInput.value = config.defaultModel;
+    const defaultBtn = suggestionsDiv.querySelectorAll('.btn')[config.models.findIndex(m => m.value === config.defaultModel)];
+    if (defaultBtn) {
+        defaultBtn.classList.remove('btn-outline-secondary');
+        defaultBtn.classList.add('btn-primary');
+    }
+
+    // Auto-set max_tokens
+    const maxTokensInput = document.querySelector('input[name="max_tokens"]');
+    const defaultModel = config.models.find(m => m.value === config.defaultModel);
+    if (maxTokensInput) maxTokensInput.value = (defaultModel && defaultModel.maxTokens) || 8192;
+
+    // Show/hide base URL
+    const baseUrlGroup = document.getElementById('baseUrlGroup');
+    const baseUrlInput = document.getElementById('baseUrlInput');
+    if (config.needsBaseUrl) {
+        baseUrlGroup.style.display = 'block';
+        baseUrlInput.value = config.defaultBaseUrl || '';
+    } else {
+        baseUrlGroup.style.display = 'none';
+        baseUrlInput.value = '';
+    }
+
+    // Hints
+    document.getElementById('apiKeyHint').textContent = config.apiKeyHint;
+    document.getElementById('modelHint').textContent = config.modelHint;
+
+    // Focus on API key input
+    document.getElementById('apiKeyInput').focus();
+
+    // For local, API key is optional
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    if (type === 'local') {
+        apiKeyInput.required = false;
+        apiKeyInput.placeholder = '留空或填写访问令牌';
+    } else {
+        apiKeyInput.required = true;
+        apiKeyInput.placeholder = '粘贴你的 API Key';
+    }
+}
+
+function testProvider(providerId) {
+    const btn = event.target.closest('button');
+    const origHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    btn.disabled = true;
+
+    fetch('/ai/admin/providers/' + providerId + '/test', {
+        method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content}
+    }).then(r => r.json()).then(data => {
+        btn.innerHTML = origHTML;
+        btn.disabled = false;
+        if (data.connected) {
+            btn.classList.remove('btn-outline-info');
+            btn.classList.add('btn-info');
+            setTimeout(() => { btn.classList.remove('btn-info'); btn.classList.add('btn-outline-info'); }, 2000);
+            alert('✓ 连接成功！');
+        } else {
+            alert('✗ 连接失败: ' + (data.message || data.error || '未知错误'));
+        }
+    }).catch(e => {
+        btn.innerHTML = origHTML;
+        btn.disabled = false;
+        alert('请求失败: ' + e);
+    });
+}
+
+function loadSwitches() {
+    fetch('/ai/admin/switches').then(r => r.json()).then(data => {
+        const panel = document.getElementById('switchPanel');
+        if (!data.switches) { panel.innerHTML = '<p class="text-muted">加载失败</p>'; return; }
+        const sw = data.switches;
+        const sortedKeys = Object.keys(sw).sort((a, b) => {
+            if (a === 'ai_global_enabled') return -1;
+            if (b === 'ai_global_enabled') return 1;
+            return 0;
+        });
+        let html = '<div class="row g-3">';
+        for (const key of sortedKeys) {
+            const info = sw[key];
+            const isGlobal = key === 'ai_global_enabled';
+            const icon = isGlobal ? 'bi-power' : 'bi-toggle-on';
+            html += `<div class="col-md-4 col-6">
+                <div class="d-flex justify-content-between align-items-center p-2 border rounded ${isGlobal ? 'border-danger border-2 bg-light' : ''}">
+                    <span><i class="bi ${icon} me-1"></i><strong ${isGlobal ? 'class="text-danger"' : ''}>${info.label}</strong></span>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" ${info.enabled ? 'checked' : ''} 
+                            onchange="toggleSwitch('${key}', this.checked)" id="sw_${key}" ${isGlobal ? 'style="width:3em;height:1.5em"' : ''}>
+                    </div>
+                </div>
+            </div>`;
+        }
+        html += '</div>';
+        panel.innerHTML = html;
+    });
+}
+
+function toggleSwitch(key, enabled) {
+    fetch('/ai/admin/switches/' + key, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
+        body: JSON.stringify({enabled: enabled})
+    }).then(r => r.json()).then(data => {
+        if (data.status !== 'success') alert('更新失败');
+        if (key === 'ai_global_enabled' && !enabled) {
+            document.querySelectorAll('#switchPanel .form-check-input').forEach(el => { el.checked = false; el.disabled = true; });
+            document.getElementById('sw_ai_global_enabled').disabled = false;
+            document.getElementById('sw_ai_global_enabled').checked = false;
+        } else if (key === 'ai_global_enabled' && enabled) {
+            document.querySelectorAll('#switchPanel .form-check-input').forEach(el => { el.disabled = false; });
+            loadSwitches();
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadSwitches);
+</script>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-download"></i> 章节导出</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i> 此功能用于<strong>章节结构的批量导出</strong>，导出的数据包含学科和章节的完整树形结构信息，可再次导入恢复。支持JSON和Excel两种格式。
+        </div>
+        <form id="exportForm" method="get" action="{{ url_for('admin.chapter_export_download') }}">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">学科</label>
+                    <select name="subject_id" class="form-select">
+                        <option value="">全部学科</option>
+                        {% for s in subjects %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">选择具体学科仅导出该学科下的章节，不选则导出全部</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">导出格式</label>
+                    <select name="format" class="form-select">
+                        <option value="json">JSON格式（含完整结构，推荐用于备份恢复）</option>
+                        <option value="excel">Excel格式（便于人工阅读和编辑）</option>
+                    </select>
+                </div>
+            </div>
+
+            <hr>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-download"></i> 导出章节
+                </button>
+                <a href="{{ url_for('admin.chapter_import') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-upload"></i> 前往章节导入
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

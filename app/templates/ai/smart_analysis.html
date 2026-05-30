@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+
+{% block title %}智能学习分析 - Study Clash{% endblock %}
+
+{% block extra_css %}
+<style>
+.analysis-card { 
+    border-radius: 12px; 
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08); 
+    margin-bottom: 1.5rem;
+    transition: transform 0.2s;
+}
+.analysis-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.card-header-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px 12px 0 0 !important;
+}
+.stat-card {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+}
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #667eea;
+}
+.stat-label {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+.mastery-bar {
+    height: 24px;
+    border-radius: 12px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+.mastery-fill {
+    height: 100%;
+    border-radius: 12px;
+    transition: width 0.5s ease;
+}
+.weak-point-item {
+    border-left: 4px solid #667eea;
+    padding-left: 1rem;
+    margin-bottom: 1rem;
+}
+.suggestion-card {
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255,255,255,0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.progress-info {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="mb-4"><i class="bi bi-graph-up"></i> AI智能学习分析</h2>
+    
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> 
+        <strong>提示：</strong>AI深度分析需要30-60秒。点击"开始AI智能分析"后，你可以切换到其他页面，回来时会自动显示进度或结果。
+    </div>
+
+    <div class="mb-3">
+        <button class="btn btn-primary btn-lg" onclick="triggerAnalysis()">
+            <i class="bi bi-play-fill"></i> 开始AI智能分析
+        </button>
+        <button class="btn btn-outline-secondary ms-2" onclick="loadReport('weekly')">
+            <i class="bi bi-file-earmark-text"></i> 周报
+        </button>
+        <button class="btn btn-outline-secondary ms-2" onclick="loadReport('monthly')">
+            <i class="bi bi-calendar-month"></i> 月报
+        </button>
+    </div>
+
+    <div id="loading" class="loading-overlay">
+        <div class="text-center">
+            <div class="spinner mb-3"></div>
+            <p class="text-muted">AI正在深度分析你的学习数据...</p>
+            <p class="text-muted"><small>这可能需要30-60秒，请耐心等待</small></p>
+        </div>
+    </div>
+
+    <div id="analysis-result"></div>
+    <div id="report-result"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+let pollInterval = null;
+let userStartedAnalysis = false;
+
+// 页面加载时：加载历史结果，但不显示进度
+window.onload = function() {
+    loadLatestResult();
+};
+
+// 用户点击"开始分析"按钮
+function triggerAnalysis() {
+    userStartedAnalysis = true;
+    
+    fetch('/ai/smart/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'started' || data.status === 'running') {
+            showProgressPanel();
+            startPolling();
+        } else if (data.status === 'error') {
+            alert('触发失败: ' + data.message);
+        }
+    })
+    .catch(err => {
+        alert('触发分析失败: ' + err);
+    });
+}
+
+// 开始轮询任务状态
+function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    
+    pollInterval = setInterval(() => {
+        fetch('/ai/smart/analyze/status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'running' || data.status === 'pending') {
+                // 任务在运行，更新进度
+                updateProgress(data.progress, data.message);
+            } else if (data.status === 'completed') {
+                // 任务完成
+                stopPolling();
+                hideProgressPanel();
+                loadLatestResult();
+                userStartedAnalysis = false;
+            } else if (data.status === 'failed') {
+                // 任务失败
+                stopPolling();
+                hideProgressPanel();
+                document.getElementById('analysis-result').innerHTML = 
+                    '<div class="alert alert-danger">分析失败: ' + (data.error_detail || data.message) + '</div>';
+                userStartedAnalysis = false;
+            } else if (data.status === 'no_task') {
+                // 没有任务
+                stopPolling();
+                hideProgressPanel();
+                userStartedAnalysis = false;
+            }
+        })
+        .catch(err => {
+            console.error('轮询失败:', err);
+        });
+    }, 2000);
+}
+
+// 停止轮询
+function stopPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+// 加载最新结果（不显示进度）
+function loadLatestResult() {
+    fetch('/ai/smart/analyze/result')
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'completed' && data.result) {
+            renderAnalysis(data.result.analysis);
+        }
+    })
+    .catch(err => {
+        console.error('获取结果失败:', err);
+    });
+}
+
+// 显示进度面板
+function showProgressPanel() {
+    document.getElementById('loading').style.display = 'flex';
+}
+
+// 隐藏进度面板
+function hideProgressPanel() {
+    document.getElementById('loading').style.display = 'none';
+}
+
+// 更新进度
+function updateProgress(progress, message) {
+    const loadingDiv = document.getElementById('loading');
+    const msgP = loadingDiv.querySelector('p.text-muted');
+    if (msgP) {
+        msgP.textContent = message || '分析中...';
+    }
+}
+
+function renderAnalysis(analysis) {
+    const container = document.getElementById('analysis-result');
+    const summary = analysis.summary;
+    const aiAnalysis = analysis.ai_analysis;
+    
+    let html = `
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle"></i> <strong>AI分析完成！</strong>以下是你的个性化学习报告。
+        </div>
+
+        <!-- 统计概览 -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-value">${summary.total_wrong_questions}</div>
+                    <div class="stat-label">总错题数</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #28a745">${summary.mastered_count}</div>
+                    <div class="stat-label">已掌握</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #dc3545">${summary.not_mastered_count}</div>
+                    <div class="stat-label">待掌握</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-value">${summary.mastery_rate}%</div>
+                    <div class="stat-label">掌握率</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // AI深度分析结果
+    if (aiAnalysis) {
+        html += `
+            <!-- AI学习风格分析 -->
+            <div class="card analysis-card">
+                <div class="card-header card-header-gradient">
+                    <i class="bi bi-stars"></i> AI学习风格分析
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center mb-3">
+                        <div class="col-md-3 text-center">
+                            <div style="font-size: 4rem;">
+                                ${aiAnalysis.learning_style === '视觉型' ? '👁️' : 
+                                  aiAnalysis.learning_style === '听觉型' ? '👂' : 
+                                  aiAnalysis.learning_style === '动手型' ? '✋' : '🧠'}
+                            </div>
+                            <h4 class="mt-2">${aiAnalysis.learning_style}</h4>
+                        </div>
+                        <div class="col-md-9">
+                            <p class="mb-0">${aiAnalysis.learning_style_analysis}</p>
+                        </div>
+                    </div>
+                    
+                    ${aiAnalysis.cognitive_patterns ? `
+                        <h6 class="mt-3"><i class="bi bi-lightbulb"></i> 认知模式</h6>
+                        <div class="row">
+                            ${aiAnalysis.cognitive_patterns.map(p => `
+                                <div class="col-md-4 mb-2">
+                                    <span class="badge bg-primary">${p}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    
+                    ${aiAnalysis.prediction ? `
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-graph-up"></i> <strong>AI预测：</strong>${aiAnalysis.prediction}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- 错题根因分析 -->
+            ${aiAnalysis.error_root_causes ? `
+                <div class="card analysis-card">
+                    <div class="card-header card-header-gradient">
+                        <i class="bi bi-search"></i> 错题根因深度分析
+                    </div>
+                    <div class="card-body">
+                        ${aiAnalysis.error_root_causes.map(cause => `
+                            <div class="weak-point-item">
+                                <h5>${cause.chapter}</h5>
+                                <p class="mb-2"><strong>根因：</strong>${cause.root_cause}</p>
+                                <p class="mb-0"><strong>解决方案：</strong>${cause.solution}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <!-- 个性化学习路径 -->
+            ${aiAnalysis.personalized_path ? `
+                <div class="card analysis-card">
+                    <div class="card-header card-header-gradient">
+                        <i class="bi bi-signpost-split"></i> AI个性化学习路径
+                    </div>
+                    <div class="card-body">
+                        ${aiAnalysis.personalized_path.map(step => `
+                            <div class="d-flex mb-3">
+                                <div class="me-3">
+                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                                         style="width: 40px; height: 40px;">
+                                        ${step.step}
+                                    </div>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">${step.action}</h6>
+                                    <p class="text-muted mb-1"><small>${step.reason}</small></p>
+                                    <span class="badge bg-info">${step.estimated_time}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <!-- 激励建议 -->
+            ${aiAnalysis.motivation_tips ? `
+                <div class="card analysis-card">
+                    <div class="card-header card-header-gradient">
+                        <i class="bi bi-heart"></i> AI激励建议
+                    </div>
+                    <div class="card-body">
+                        ${aiAnalysis.motivation_tips.map((tip, i) => `
+                            <div class="suggestion-card bg-success text-white mb-2">
+                                <i class="bi bi-check-circle"></i> ${tip}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        `;
+    }
+    
+    // 基础分析结果
+    html += `
+        <!-- 知识点掌握度 -->
+        <div class="card analysis-card">
+            <div class="card-header card-header-gradient">
+                <i class="bi bi-bar-chart"></i> 知识点掌握度
+            </div>
+            <div class="card-body">
+    `;
+    
+    analysis.mastery.forEach(m => {
+        html += `
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                    <strong>${m.name}</strong>
+                    <span class="badge bg-${m.color}">${m.level} ${m.mastery_rate}%</span>
+                </div>
+                <div class="mastery-bar">
+                    <div class="mastery-fill bg-${m.color}" style="width: ${m.mastery_rate}%"></div>
+                </div>
+                <small class="text-muted">已掌握 ${m.mastered_questions}/${m.total_questions} 题</small>
+            </div>
+        `;
+    });
+    
+    html += `
+            </div>
+        </div>
+
+        <!-- 薄弱知识点 -->
+        <div class="card analysis-card">
+            <div class="card-header card-header-gradient">
+                <i class="bi bi-exclamation-triangle"></i> 薄弱知识点预测
+            </div>
+            <div class="card-body">
+    `;
+    
+    if (analysis.weak_points.length === 0) {
+        html += '<p class="text-muted">暂无薄弱知识点，继续保持！</p>';
+    } else {
+        analysis.weak_points.forEach(wp => {
+            const priorityBadge = wp.priority === '高' ? 'bg-danger' : 
+                                 wp.priority === '中' ? 'bg-warning' : 'bg-info';
+            html += `
+                <div class="weak-point-item">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">${wp.name}</h5>
+                        <span class="badge ${priorityBadge}">优先级: ${wp.priority}</span>
+                    </div>
+                    <p class="mb-1">
+                        <strong>薄弱度:</strong> ${wp.weak_score}% | 
+                        <strong>掌握率:</strong> ${wp.mastery_rate}% | 
+                        <strong>错题数:</strong> ${wp.wrong_count}
+                    </p>
+                    <p class="text-muted mb-0"><i class="bi bi-info-circle"></i> ${wp.recommendation}</p>
+                </div>
+            `;
+        });
+    }
+    
+    html += `
+            </div>
+        </div>
+
+        <!-- 学习建议 -->
+        <div class="card analysis-card">
+            <div class="card-header card-header-gradient">
+                <i class="bi bi-lightbulb"></i> 个性化学习建议
+            </div>
+            <div class="card-body">
+    `;
+    
+    analysis.suggestions.forEach(s => {
+        html += `
+            <div class="suggestion-card bg-${s.color} text-white">
+                <h5><i class="bi bi-${s.icon}"></i> ${s.title}</h5>
+                <p class="mb-0">${s.content}</p>
+            </div>
+        `;
+    });
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function loadReport(reportType) {
+    fetch('/ai/smart/report?report_type=' + reportType)
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            renderReport(data.report);
+        } else {
+            document.getElementById('report-result').innerHTML = 
+                '<div class="alert alert-warning">' + data.message + '</div>';
+        }
+    })
+    .catch(err => {
+        document.getElementById('report-result').innerHTML = 
+            '<div class="alert alert-danger">报告生成失败: ' + err + '</div>';
+    });
+}
+
+function renderReport(report) {
+    const container = document.getElementById('report-result');
+    const summary = report.summary;
+    
+    let html = `
+        <div class="card analysis-card mt-4">
+            <div class="card-header card-header-gradient">
+                <i class="bi bi-file-earmark-text"></i> ${report.title}
+            </div>
+            <div class="card-body">
+                <p class="text-muted"><i class="bi bi-calendar"></i> ${report.period}</p>
+                
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-value">${summary.total_wrong}</div>
+                            <div class="stat-label">错题数</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-value" style="color: #28a745">${summary.mastered}</div>
+                            <div class="stat-label">已掌握</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-value">${summary.mastery_rate}%</div>
+                            <div class="stat-label">掌握率</div>
+                        </div>
+                    </div>
+                </div>
+    `;
+    
+    if (report.highlights.length > 0) {
+        html += '<h5><i class="bi bi-star"></i> 学习亮点</h5><ul>';
+        report.highlights.forEach(h => {
+            html += `<li>${h}</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    if (report.weaknesses.length > 0) {
+        html += '<h5><i class="bi bi-exclamation-circle"></i> 需改进</h5><ul>';
+        report.weaknesses.forEach(w => {
+            html += `<li>${w}</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    if (report.recommendations.length > 0) {
+        html += '<h5><i class="bi bi-lightbulb"></i> 建议</h5><ul>';
+        report.recommendations.forEach(r => {
+            html += `<li>${r}</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "admin/base.html" %}
+
+{% block title %}AI调用策略 - 管理后台{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4><i class="bi bi-toggles"></i> AI调用策略配置</h4>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-plus-circle"></i> 新增/更新调用策略
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('admin.ai_strategy_update') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label class="form-label">服务商 <span class="text-danger">*</span></label>
+                            <select class="form-select" name="provider_id" required>
+                                <option value="">请选择</option>
+                                {% for p in providers %}
+                                <option value="{{ p.id }}">{{ p.name }} ({{ p.model_name }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">任务类型 <span class="text-danger">*</span></label>
+                            <select class="form-select" name="task_type" required>
+                                <option value="">请选择</option>
+                                {% for key, label in task_types.items() %}
+                                <option value="{{ key }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="form-label">超时(秒)</label>
+                                <input type="number" class="form-control" name="timeout_seconds" value="30" min="10" max="300">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">最大重试</label>
+                                <input type="number" class="form-control" name="max_retries" value="2" min="0" max="5">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="form-label">重试间隔(秒)</label>
+                                <input type="number" class="form-control" name="retry_delay_seconds" value="3" min="1" max="30">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Token上限</label>
+                                <input type="number" class="form-control" name="token_limit" value="4096" min="100" max="100000">
+                            </div>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="form-label">日Token预算</label>
+                                <input type="number" class="form-control" name="daily_token_budget" value="100000" min="1000">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">温度覆盖</label>
+                                <input type="number" class="form-control" name="temperature_override" placeholder="留空使用默认" min="0" max="2" step="0.1">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg"></i> 保存策略</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-list-check"></i> 已配置的调用策略
+                </div>
+                <div class="card-body">
+                    {% if strategies %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>服务商</th>
+                                    <th>任务类型</th>
+                                    <th>超时</th>
+                                    <th>重试</th>
+                                    <th>Token上限</th>
+                                    <th>日预算</th>
+                                    <th>温度</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for s in strategies %}
+                                <tr>
+                                    <td>{{ s.provider.name if s.provider else '-' }}</td>
+                                    <td><span class="badge bg-info">{{ task_types.get(s.task_type, s.task_type) }}</span></td>
+                                    <td>{{ s.timeout_seconds }}s</td>
+                                    <td>{{ s.max_retries }}次</td>
+                                    <td>{{ s.token_limit }}</td>
+                                    <td>{{ s.daily_token_budget }}</td>
+                                    <td>{{ s.temperature_override or '默认' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-3">暂无调用策略配置</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="alert alert-info mt-3">
+                <i class="bi bi-info-circle"></i> 调用策略可按"服务商+任务类型"维度配置不同的超时、重试和Token预算参数。未配置的策略将使用默认值。
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,684 @@
+{% extends "admin/base.html" %}
+
+{% block title %}题目管理 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h4><i class="bi bi-journal-text"></i> 题目管理</h4>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-success" id="btnExport">
+                <i class="bi bi-download"></i> 导出
+            </button>
+            <a href="{{ url_for('admin.quiz_import') }}" class="btn btn-primary">
+                <i class="bi bi-upload"></i> 导入题目
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary bg-opacity-10 border-0">
+            <div class="card-body text-center py-3">
+                <div class="text-primary fs-4 fw-bold">{{ total_count }}</div>
+                <div class="text-muted small">筛选结果总数</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info bg-opacity-10 border-0">
+            <div class="card-body text-center py-3">
+                <div class="text-info fs-4 fw-bold">{{ type_stats.get('single', 0) }}</div>
+                <div class="text-muted small">单选题</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success bg-opacity-10 border-0">
+            <div class="card-body text-center py-3">
+                <div class="text-success fs-4 fw-bold">{{ type_stats.get('multiple', 0) }}</div>
+                <div class="text-muted small">多选题</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning bg-opacity-10 border-0">
+            <div class="card-body text-center py-3">
+                <div class="text-warning fs-4 fw-bold">{{ type_stats.get('judge', 0) }}</div>
+                <div class="text-muted small">判断题</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <h6 class="mb-0"><i class="bi bi-funnel"></i> 筛选条件</h6>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#filterBody" aria-expanded="true" aria-controls="filterBody" id="filterToggleBtn">
+            <i class="bi bi-chevron-up" id="filterToggleIcon"></i>
+        </button>
+    </div>
+    <div class="collapse show" id="filterBody">
+        <div class="card-body">
+            <form method="GET" class="row g-3" id="filterForm">
+                <div class="col-12 col-sm-6 col-md-2">
+                    <label class="form-label small mb-1">关键词</label>
+                    <input type="text" class="form-control" name="keyword" placeholder="关键词搜索" value="{{ request.args.get('keyword', '') }}">
+                </div>
+                <div class="col-12 col-sm-6 col-md-1">
+                    <label class="form-label small mb-1">ID</label>
+                    <input type="text" class="form-control" name="id" placeholder="ID" value="{{ request.args.get('id', '') }}">
+                </div>
+                <div class="col-12 col-sm-6 col-md-2">
+                    <label class="form-label small mb-1">学科</label>
+                    <select class="form-select" name="subject_id" id="subjectSelect">
+                        <option value="">全部学科</option>
+                        {% for subject in subjects %}
+                        <option value="{{ subject.id }}" {% if request.args.get('subject_id') == subject.id|string %}selected{% endif %}>
+                            {{ subject.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-md-2">
+                    <label class="form-label small mb-1">章节</label>
+                    <select class="form-select" name="chapter_id" id="chapterSelect">
+                        <option value="">全部章节</option>
+                        <option value="uncategorized" {% if request.args.get('chapter_id') == 'uncategorized' %}selected{% endif %}>未归类题目</option>
+                        {% for chapter in chapters %}
+                        <option value="{{ chapter.id }}" {% if request.args.get('chapter_id') == chapter.id|string %}selected{% endif %}>
+                            {{ chapter.get_full_path() }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-md-1">
+                    <label class="form-label small mb-1">题型</label>
+                    <select class="form-select" name="question_type">
+                        <option value="">全部题型</option>
+                        <option value="single" {% if request.args.get('question_type') == 'single' %}selected{% endif %}>单选</option>
+                        <option value="multiple" {% if request.args.get('question_type') == 'multiple' %}selected{% endif %}>多选</option>
+                        <option value="judge" {% if request.args.get('question_type') == 'judge' %}selected{% endif %}>判断</option>
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-md-1">
+                    <label class="form-label small mb-1">难度</label>
+                    <select class="form-select" name="difficulty">
+                        <option value="">全部难度</option>
+                        <option value="1" {% if request.args.get('difficulty') == '1' %}selected{% endif %}>简单</option>
+                        <option value="2" {% if request.args.get('difficulty') == '2' %}selected{% endif %}>中等</option>
+                        <option value="3" {% if request.args.get('difficulty') == '3' %}selected{% endif %}>困难</option>
+                        <option value="4" {% if request.args.get('difficulty') == '4' %}selected{% endif %}>极难</option>
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-md-1">
+                    <label class="form-label small mb-1">状态</label>
+                    <select class="form-select" name="status">
+                        <option value="">全部状态</option>
+                        <option value="active" {% if request.args.get('status') == 'active' %}selected{% endif %}>启用</option>
+                        <option value="inactive" {% if request.args.get('status') == 'inactive' %}selected{% endif %}>禁用</option>
+                    </select>
+                </div>
+                <div class="col-12 col-sm-6 col-md-2">
+                    <label class="form-label small mb-1">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> 筛选
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnMoveChapter" disabled>
+                    <i class="bi bi-folder-symlink"></i> 迁移章节
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm" id="btnBatchEnable" disabled>
+                    <i class="bi bi-check-circle"></i> 批量启用
+                </button>
+                <button type="button" class="btn btn-outline-warning btn-sm" id="btnBatchDisable" disabled>
+                    <i class="bi bi-x-circle"></i> 批量禁用
+                </button>
+                <button type="button" class="btn btn-outline-info btn-sm" id="btnBatchDifficulty" disabled>
+                    <i class="bi bi-bar-chart"></i> 修改难度
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="btnBatchDelete" disabled>
+                    <i class="bi bi-trash"></i> 批量删除
+                </button>
+            </div>
+            <span class="text-muted small">已选择 <span id="selectedCount" class="fw-bold">0</span> 道题目</span>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" class="form-check-input" id="selectAll">
+                    </th>
+                    <th style="width: 60px;">ID</th>
+                    <th>题目内容</th>
+                    <th style="width: 70px;">学科</th>
+                    <th style="width: 80px;">章节</th>
+                    <th style="width: 50px;">题型</th>
+                    <th style="width: 45px;">难度</th>
+                    <th style="width: 45px;">状态</th>
+                    <th style="width: 110px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for question in pagination.items %}
+                <tr data-id="{{ question.id }}">
+                    <td>
+                        <input type="checkbox" class="form-check-input question-checkbox" value="{{ question.id }}">
+                    </td>
+                    <td>{{ question.id }}</td>
+                    <td class="question-content-col">
+                        <span class="question-content question-content-text" style="cursor: pointer;" data-id="{{ question.id }}" {% if question.content|length > 100 %}data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" title="{{ question.content[:500] }}{% if question.content|length > 500 %}...{% endif %}"{% else %}title="{{ question.content }}"{% endif %}>
+                            {{ question.content[:100] }}{% if question.content|length > 100 %}...{% endif %}
+                        </span>
+                        {% if question.image_url %}
+                        <i class="bi bi-image text-success ms-1" title="已有图片"></i>
+                        {% endif %}
+                    </td>
+                    <td class="text-truncate" style="max-width:70px;"><small>{{ question.subject.name if question.subject else '-' }}</small></td>
+                    <td class="text-truncate" style="max-width:80px;"><small>{{ question.chapter.name if question.chapter else '-' }}</small></td>
+                    <td>
+                        <span class="badge bg-{{ 'primary' if question.question_type == 'single' else 'success' if question.question_type == 'multiple' else 'info' }}">
+                            {{ '单选' if question.question_type == 'single' else '多选' if question.question_type == 'multiple' else '判断' }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge bg-{{ 'success' if question.difficulty == 1 else 'warning' if question.difficulty == 2 else 'danger' if question.difficulty == 3 else 'dark' }}">
+                            {{ question.difficulty }}星
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge status-badge bg-{{ 'success' if question.is_active else 'danger' }}" data-id="{{ question.id }}">
+                            {{ '启用' if question.is_active else '禁用' }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-info btn-preview" data-id="{{ question.id }}" title="预览">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-{{ 'warning' if question.is_active else 'success' }} btn-toggle-status" data-id="{{ question.id }}" title="{{ '禁用' if question.is_active else '启用' }}" {% if is_teacher and question.created_by != current_user_id %}disabled{% endif %}>
+                                <i class="bi bi-{{ 'x-circle' if question.is_active else 'check-circle' }}"></i>
+                            </button>
+                            <a href="{{ url_for('questions.edit', id=question.id) }}" class="btn btn-outline-primary" title="编辑" {% if is_teacher and question.created_by != current_user_id %}onclick="alert('您只能编辑自己创建的题目');return false;"{% endif %}>
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button type="button" class="btn btn-outline-danger btn-delete" data-id="{{ question.id }}" title="删除" {% if is_teacher and question.created_by != current_user_id %}disabled{% endif %}>
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">暂无题目</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if pagination.pages > 1 or per_page != 20 %}
+<nav class="mt-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <ul class="pagination mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.questions', page=pagination.prev_num, per_page=per_page, subject_id=request.args.get('subject_id'), chapter_id=request.args.get('chapter_id'), question_type=request.args.get('question_type'), difficulty=request.args.get('difficulty'), status=request.args.get('status'), keyword=request.args.get('keyword'), id=request.args.get('id')) }}">上一页</a>
+            </li>
+            {% endif %}
+            
+            {% for page_num in pagination.iter_pages() %}
+                {% if page_num %}
+                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin.questions', page=page_num, per_page=per_page, subject_id=request.args.get('subject_id'), chapter_id=request.args.get('chapter_id'), question_type=request.args.get('question_type'), difficulty=request.args.get('difficulty'), status=request.args.get('status'), keyword=request.args.get('keyword'), id=request.args.get('id')) }}">{{ page_num }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if pagination.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.questions', page=pagination.next_num, per_page=per_page, subject_id=request.args.get('subject_id'), chapter_id=request.args.get('chapter_id'), question_type=request.args.get('question_type'), difficulty=request.args.get('difficulty'), status=request.args.get('status'), keyword=request.args.get('keyword'), id=request.args.get('id')) }}">下一页</a>
+            </li>
+            {% endif %}
+        </ul>
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">每页显示</span>
+            <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;">
+                {% for pp in [10, 20, 50, 100, 200] %}
+                <option value="{{ pp }}" {% if pp == per_page %}selected{% endif %}>{{ pp }} 条</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</nav>
+{% endif %}
+
+<div class="modal fade" id="moveChapterModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">迁移题目到章节</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="moveChapterForm">
+                    <input type="hidden" name="question_ids" id="moveQuestionIds">
+                    <div class="mb-3">
+                        <label class="form-label">选择学科</label>
+                        <select class="form-select" name="subject_id" id="moveSubjectSelect">
+                            <option value="">请选择学科</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">选择章节</label>
+                        <select class="form-select" name="chapter_id" id="moveChapterSelect">
+                            <option value="">请先选择学科</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmMove">确认迁移</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="difficultyModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">修改难度</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="difficultyForm">
+                    <input type="hidden" name="question_ids" id="difficultyQuestionIds">
+                    <input type="hidden" name="action" value="set_difficulty">
+                    <select class="form-select" name="difficulty">
+                        <option value="1">简单</option>
+                        <option value="2">中等</option>
+                        <option value="3">困难</option>
+                        <option value="4">极难</option>
+                    </select>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmDifficulty">确认</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">题目详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="previewContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">导出题目</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary" id="btnExportSelected">
+                        <i class="bi bi-check-square"></i> 导出选中题目
+                    </button>
+                    <button type="button" class="btn btn-outline-success" id="btnExportFiltered">
+                        <i class="bi bi-funnel"></i> 导出筛选结果
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<style>
+.question-content-col { min-width: 300px; }
+.question-content-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5;
+}
+@supports not (-webkit-line-clamp: 2) {
+    .question-content-text {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+.tooltip-inner { max-width: 400px; text-align: left; word-break: break-word; }
+</style>
+<script>
+const csrfToken = '{{ csrf_token() }}';
+
+document.getElementById('perPageSelect').addEventListener('change', function() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('per_page', this.value);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+});
+
+const selectAllCheckbox = document.getElementById('selectAll');
+const questionCheckboxes = document.querySelectorAll('.question-checkbox');
+const selectedCountSpan = document.getElementById('selectedCount');
+const batchButtons = ['btnMoveChapter', 'btnBatchEnable', 'btnBatchDisable', 'btnBatchDifficulty', 'btnBatchDelete'];
+
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.question-checkbox:checked')).map(cb => cb.value);
+}
+
+function updateSelectedCount() {
+    const count = getSelectedIds().length;
+    selectedCountSpan.textContent = count;
+    batchButtons.forEach(id => {
+        document.getElementById(id).disabled = count === 0;
+    });
+    selectAllCheckbox.checked = count === questionCheckboxes.length && questionCheckboxes.length > 0;
+}
+
+selectAllCheckbox.addEventListener('change', function() {
+    questionCheckboxes.forEach(cb => cb.checked = this.checked);
+    updateSelectedCount();
+});
+
+questionCheckboxes.forEach(cb => cb.addEventListener('change', updateSelectedCount));
+
+function batchAction(action, extraData = {}) {
+    const ids = getSelectedIds();
+    if (ids.length === 0) return;
+    
+    const formData = new FormData();
+    formData.append('csrf_token', csrfToken);
+    formData.append('action', action);
+    formData.append('question_ids', ids.join(','));
+    for (const [key, value] of Object.entries(extraData)) {
+        formData.append(key, value);
+    }
+    
+    fetch('/admin/questions/batch-action', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || '操作失败');
+        }
+    });
+}
+
+document.getElementById('btnBatchEnable').addEventListener('click', () => batchAction('enable'));
+document.getElementById('btnBatchDisable').addEventListener('click', () => batchAction('disable'));
+document.getElementById('btnBatchDelete').addEventListener('click', () => {
+    if (confirm('确定要删除选中的题目吗？此操作不可恢复！')) {
+        batchAction('delete');
+    }
+});
+
+const moveChapterModal = new bootstrap.Modal(document.getElementById('moveChapterModal'));
+document.getElementById('btnMoveChapter').addEventListener('click', function() {
+    document.getElementById('moveQuestionIds').value = getSelectedIds().join(',');
+    document.getElementById('moveSubjectSelect').value = '';
+    document.getElementById('moveChapterSelect').innerHTML = '<option value="">请先选择学科</option>';
+    moveChapterModal.show();
+});
+
+document.getElementById('moveSubjectSelect').addEventListener('change', function() {
+    const select = document.getElementById('moveChapterSelect');
+    select.innerHTML = '<option value="">加载中...</option>';
+    if (this.value) {
+        fetch('/questions/api/chapters/' + this.value)
+            .then(r => r.json())
+            .then(data => {
+                select.innerHTML = '<option value="">不指定章节</option>';
+                data.forEach(c => select.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            });
+    } else {
+        select.innerHTML = '<option value="">请先选择学科</option>';
+    }
+});
+
+document.getElementById('btnConfirmMove').addEventListener('click', function() {
+    const formData = new FormData(document.getElementById('moveChapterForm'));
+    formData.append('csrf_token', csrfToken);
+    fetch('/admin/questions/move-chapter', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) location.reload();
+            else alert(data.message || '迁移失败');
+        });
+});
+
+const difficultyModal = new bootstrap.Modal(document.getElementById('difficultyModal'));
+document.getElementById('btnBatchDifficulty').addEventListener('click', function() {
+    document.getElementById('difficultyQuestionIds').value = getSelectedIds().join(',');
+    difficultyModal.show();
+});
+
+document.getElementById('btnConfirmDifficulty').addEventListener('click', function() {
+    const formData = new FormData(document.getElementById('difficultyForm'));
+    formData.append('csrf_token', csrfToken);
+    fetch('/admin/questions/batch-action', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) location.reload();
+            else alert(data.message || '修改失败');
+        });
+});
+
+document.querySelectorAll('.btn-toggle-status').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        const formData = new FormData();
+        formData.append('csrf_token', csrfToken);
+        fetch('/admin/questions/toggle-status/' + id, { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const badge = document.querySelector(`.status-badge[data-id="${id}"]`);
+                    badge.className = `badge status-badge bg-${data.is_active ? 'success' : 'danger'}`;
+                    badge.textContent = data.is_active ? '启用' : '禁用';
+                    this.className = `btn btn-outline-${data.is_active ? 'warning' : 'success'} btn-toggle-status`;
+                    this.innerHTML = `<i class="bi bi-${data.is_active ? 'x-circle' : 'check-circle'}"></i>`;
+                }
+            });
+    });
+});
+
+document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', function() {
+        if (!confirm('确定删除此题目？')) return;
+        const id = this.dataset.id;
+        const formData = new FormData();
+        formData.append('csrf_token', csrfToken);
+        fetch('/admin/questions/delete/' + id, { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.querySelector(`tr[data-id="${id}"]`).remove();
+                }
+            });
+    });
+});
+
+const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+function showPreview(id) {
+    document.getElementById('previewContent').innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+    previewModal.show();
+    fetch('/admin/questions/detail/' + id)
+        .then(r => r.json())
+        .then(data => {
+            const typeNames = {single: '单选题', multiple: '多选题', judge: '判断题', fill: '填空题'};
+            const diffNames = {1: '简单', 2: '中等', 3: '困难', 4: '极难'};
+            let optionsHtml = '';
+            ['A', 'B', 'C', 'D', 'E', 'F'].forEach(letter => {
+                const opt = data['option_' + letter.toLowerCase()];
+                const optImg = data['option_' + letter.toLowerCase() + '_image'];
+                if (opt || optImg) {
+                    optionsHtml += `<div class="p-2 mb-2 bg-light rounded">
+                        <strong>${letter}.</strong> ${opt || ''}
+                        ${optImg ? `<br><img src="${optImg}" class="mt-2 rounded" style="max-width: 150px; max-height: 80px;">` : ''}
+                    </div>`;
+                }
+            });
+            
+            let questionImageHtml = '';
+            if (data.image_url) {
+                questionImageHtml = `<div class="mb-3"><h6>题目图片</h6><img src="${data.image_url}" class="img-fluid rounded" style="max-width: 300px;"></div>`;
+            }
+            
+            document.getElementById('previewContent').innerHTML = `
+                <div class="mb-3">
+                    <span class="badge bg-primary me-1">${typeNames[data.question_type] || data.question_type}</span>
+                    <span class="badge bg-secondary me-1">${diffNames[data.difficulty] || data.difficulty + '星'}</span>
+                    <span class="badge bg-${data.is_active ? 'success' : 'danger'}">${data.is_active ? '启用' : '禁用'}</span>
+                </div>
+                <div class="mb-3">
+                    <h6>题目内容</h6>
+                    <p class="bg-light p-3 rounded">${data.content}</p>
+                </div>
+                ${questionImageHtml}
+                ${optionsHtml ? `<div class="mb-3"><h6>选项</h6>${optionsHtml}</div>` : ''}
+                <div class="mb-3">
+                    <h6>正确答案</h6>
+                    <p class="bg-success bg-opacity-25 p-2 rounded fw-bold">${data.correct_answer}</p>
+                </div>
+                ${data.analysis ? `<div class="mb-3"><h6>解析</h6><p class="bg-light p-3 rounded">${data.analysis}</p></div>` : ''}
+                <div class="row text-muted small">
+                    <div class="col-md-6">学科: ${data.subject_name || '-'}</div>
+                    <div class="col-md-6">章节: ${data.chapter_name || '-'}</div>
+                </div>
+            `;
+        });
+}
+
+document.querySelectorAll('.btn-preview, .question-content').forEach(el => {
+    el.addEventListener('click', function() {
+        showPreview(this.dataset.id);
+    });
+});
+
+const exportModal = new bootstrap.Modal(document.getElementById('exportModal'));
+document.getElementById('btnExport').addEventListener('click', () => exportModal.show());
+
+document.getElementById('btnExportSelected').addEventListener('click', function() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        alert('请先选择要导出的题目');
+        return;
+    }
+    window.location.href = '/admin/questions/export?ids=' + ids.join(',');
+    exportModal.hide();
+});
+
+document.getElementById('btnExportFiltered').addEventListener('click', function() {
+    const params = new URLSearchParams();
+    ['subject_id', 'chapter_id', 'question_type', 'difficulty', 'status', 'keyword'].forEach(key => {
+        const el = document.querySelector(`[name="${key}"]`);
+        if (el && el.value) params.append(key, el.value);
+    });
+    window.location.href = '/admin/questions/export?' + params.toString();
+    exportModal.hide();
+});
+
+document.getElementById('subjectSelect').addEventListener('change', function() {
+    const chapterSelect = document.getElementById('chapterSelect');
+    chapterSelect.innerHTML = '<option value="">加载中...</option>';
+    if (this.value) {
+        fetch('/questions/api/chapters/' + this.value)
+            .then(r => r.json())
+            .then(data => {
+                chapterSelect.innerHTML = '<option value="">全部章节</option>';
+                data.forEach(c => chapterSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            });
+    } else {
+        chapterSelect.innerHTML = '<option value="">全部章节</option>';
+    }
+});
+
+const filterBody = document.getElementById('filterBody');
+const filterToggleIcon = document.getElementById('filterToggleIcon');
+const filterToggleBtn = document.getElementById('filterToggleBtn');
+try {
+    if (localStorage.getItem('admin_questions_filter_collapsed') === 'true') {
+        filterBody.classList.remove('show');
+        filterToggleIcon.className = 'bi bi-chevron-down';
+        filterToggleBtn.setAttribute('aria-expanded', 'false');
+    }
+} catch(e) {}
+filterBody.addEventListener('shown.bs.collapse', function() {
+    filterToggleIcon.className = 'bi bi-chevron-up';
+    try { localStorage.setItem('admin_questions_filter_collapsed', 'false'); } catch(e) {}
+});
+filterBody.addEventListener('hidden.bs.collapse', function() {
+    filterToggleIcon.className = 'bi bi-chevron-down';
+    try { localStorage.setItem('admin_questions_filter_collapsed', 'true'); } catch(e) {}
+});
+
+const subjectSelect = document.getElementById('subjectSelect');
+const chapterSelect = document.getElementById('chapterSelect');
+chapterSelect.addEventListener('change', function() {
+    if (this.value === 'uncategorized') {
+        subjectSelect.value = '';
+        subjectSelect.disabled = true;
+    } else {
+        subjectSelect.disabled = false;
+    }
+});
+if (chapterSelect.value === 'uncategorized') {
+    subjectSelect.disabled = true;
+}
+
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el, { trigger: 'hover', delay: { show: 0, hide: 150 } });
+});
+</script>
+{% endblock %}

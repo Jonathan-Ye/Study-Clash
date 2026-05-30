@@ -1,0 +1,511 @@
+{% extends "admin/base.html" %}
+
+{% block title %}反馈详情 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-flag-fill text-danger"></i> 反馈详情</h2>
+    <a href="{{ url_for('admin.feedback_list') }}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> 返回列表
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <!-- 步骤1: 反馈信息 -->
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <span class="badge bg-primary me-2">1</span>
+                    反馈信息
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="row mb-3">
+                            <div class="col-4 text-muted">反馈ID:</div>
+                            <div class="col-8">{{ feedback.id }}</div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-4 text-muted">反馈类型:</div>
+                            <div class="col-8">
+                                <span class="badge bg-{{ 'danger' if feedback.feedback_type == 'error' else 'warning' if feedback.feedback_type == 'answer_error' else 'info' }}">
+                                    {{ QuestionFeedback.FEEDBACK_TYPES.get(feedback.feedback_type, feedback.feedback_type) }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-4 text-muted">状态:</div>
+                            <div class="col-8">
+                                {% if feedback.status == 'pending' %}
+                                <span class="badge bg-warning">待处理</span>
+                                {% elif feedback.status == 'processing' %}
+                                <span class="badge bg-info">处理中</span>
+                                {% elif feedback.status == 'resolved' %}
+                                <span class="badge bg-success">已解决</span>
+                                {% else %}
+                                <span class="badge bg-secondary">已拒绝</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-4 text-muted">提交时间:</div>
+                            <div class="col-8">{{ feedback.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <strong>反馈内容:</strong>
+                            <div class="alert alert-light border mt-2">
+                                {{ feedback.content }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-person-fill"></i> 反馈用户</h6>
+                        <div class="d-flex align-items-center mb-3">
+                            <img src="{{ url_for('static', filename='avatars/' + feedback.user.avatar) }}" 
+                                 class="rounded-circle me-3" width="50" height="50" alt="头像">
+                            <div>
+                                <div><strong>{{ feedback.user.username }}</strong></div>
+                                {% if feedback.user.real_name %}
+                                <div class="text-muted small">{{ feedback.user.real_name }}</div>
+                                {% endif %}
+                                {% if feedback.user.student_id %}
+                                <div class="text-muted small">学号: {{ feedback.user.student_id }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <span class="text-muted">总积分:</span>
+                            <span class="badge bg-primary ms-2">{{ feedback.user.total_points }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 步骤2: 反馈题目 -->
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <span class="badge bg-primary me-2">2</span>
+                    反馈题目
+                    <button class="btn btn-sm btn-warning ms-3" onclick="toggleQuestionEdit()">
+                        <i class="bi bi-pencil-fill"></i> 编辑题目
+                    </button>
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- 题目查看模式 -->
+                <div id="questionViewMode">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <strong>题目内容:</strong>
+                                <div class="border rounded p-3 bg-light mt-2">
+                                    {{ feedback.question.content }}
+                                </div>
+                            </div>
+                            
+                            {% if feedback.question.image_url %}
+                            <div class="mb-3">
+                                <strong>题目图片:</strong>
+                                <div class="mt-2">
+                                    <img src="{{ url_for('static', filename=feedback.question.image_url) }}" 
+                                         class="img-thumbnail" style="max-height: 200px;">
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <strong>题型:</strong> {{ feedback.question.QUESTION_TYPES.get(feedback.question.question_type, feedback.question.question_type) }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <strong>难度:</strong> 
+                                    <span class="badge bg-{{ 'success' if feedback.question.difficulty == 1 else 'warning' if feedback.question.difficulty <= 2 else 'danger' }}">
+                                        {{ feedback.question.DIFFICULTY_LEVELS.get(feedback.question.difficulty, feedback.question.difficulty) }}
+                                    </span>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <strong>正确答案:</strong> {{ feedback.question.correct_answer }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <strong>分值:</strong> {{ feedback.question.points }}
+                                </div>
+                            </div>
+                            
+                            {% if feedback.question.analysis %}
+                            <div class="mb-3">
+                                <strong>解析:</strong>
+                                <div class="border rounded p-3 bg-light mt-2">
+                                    {{ feedback.question.analysis }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">选项信息</h6>
+                                </div>
+                                <div class="card-body">
+                                    {% if feedback.question.option_a %}
+                                    <div class="mb-2">
+                                        <strong>A.</strong> {{ feedback.question.option_a }}
+                                        {% if feedback.question.option_a_image %}
+                                        <div class="mt-1">
+                                            <img src="{{ url_for('static', filename=feedback.question.option_a_image) }}" 
+                                                 class="img-thumbnail" style="max-height: 80px;">
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if feedback.question.option_b %}
+                                    <div class="mb-2">
+                                        <strong>B.</strong> {{ feedback.question.option_b }}
+                                        {% if feedback.question.option_b_image %}
+                                        <div class="mt-1">
+                                            <img src="{{ url_for('static', filename=feedback.question.option_b_image) }}" 
+                                                 class="img-thumbnail" style="max-height: 80px;">
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if feedback.question.option_c %}
+                                    <div class="mb-2">
+                                        <strong>C.</strong> {{ feedback.question.option_c }}
+                                        {% if feedback.question.option_c_image %}
+                                        <div class="mt-1">
+                                            <img src="{{ url_for('static', filename=feedback.question.option_c_image) }}" 
+                                                 class="img-thumbnail" style="max-height: 80px;">
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if feedback.question.option_d %}
+                                    <div class="mb-2">
+                                        <strong>D.</strong> {{ feedback.question.option_d }}
+                                        {% if feedback.question.option_d_image %}
+                                        <div class="mt-1">
+                                            <img src="{{ url_for('static', filename=feedback.question.option_d_image) }}" 
+                                                 class="img-thumbnail" style="max-height: 80px;">
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if feedback.question.option_e %}
+                                    <div class="mb-2">
+                                        <strong>E.</strong> {{ feedback.question.option_e }}
+                                        {% if feedback.question.option_e_image %}
+                                        <div class="mt-1">
+                                            <img src="{{ url_for('static', filename=feedback.question.option_e_image) }}" 
+                                                 class="img-thumbnail" style="max-height: 80px;">
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if feedback.question.option_f %}
+                                    <div class="mb-2">
+                                        <strong>F.</strong> {{ feedback.question.option_f }}
+                                        {% if feedback.question.option_f_image %}
+                                        <div class="mt-1">
+                                            <img src="{{ url_for('static', filename=feedback.question.option_f_image) }}" 
+                                                 class="img-thumbnail" style="max-height: 80px;">
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="card mt-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0">题目信息</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        <strong>学科:</strong> {{ feedback.question.subject.name }}
+                                    </div>
+                                    {% if feedback.question.chapter %}
+                                    <div class="mb-2">
+                                        <strong>章节:</strong> {{ feedback.question.chapter.name }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="mb-2">
+                                        <strong>创建时间:</strong> {{ feedback.question.created_at.strftime('%Y-%m-%d') }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 题目编辑模式 -->
+                <div id="questionEditMode" style="display: none;">
+                    <form method="POST" id="editQuestionForm" class="edit-question-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">学科</label>
+                                <select class="form-select" name="subject_id" required>
+                                    {% for subject in subjects %}
+                                    <option value="{{ subject.id }}" {% if feedback.question.subject_id == subject.id %}selected{% endif %}>{{ subject.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">章节</label>
+                                <select class="form-select" name="chapter_id">
+                                    <option value="">无</option>
+                                    {% for chapter in chapters %}
+                                    <option value="{{ chapter.id }}" {% if feedback.question.chapter_id == chapter.id %}selected{% endif %}>{{ chapter.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">题目内容</label>
+                            <textarea class="form-control" name="content" rows="3" required>{{ feedback.question.content }}</textarea>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">题型</label>
+                                <select class="form-select" name="question_type" id="editQuestionType" required>
+                                    <option value="single" {% if feedback.question.question_type == 'single' %}selected{% endif %}>单选题</option>
+                                    <option value="multiple" {% if feedback.question.question_type == 'multiple' %}selected{% endif %}>多选题</option>
+                                    <option value="judge" {% if feedback.question.question_type == 'judge' %}selected{% endif %}>判断题</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">难度</label>
+                                <select class="form-select" name="difficulty" required>
+                                    {% for level in [1, 2, 3, 4] %}
+                                    <option value="{{ level }}" {% if feedback.question.difficulty == level %}selected{% endif %}>
+                                        {{ feedback.question.DIFFICULTY_LEVELS.get(level, level) }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">分值</label>
+                                <input type="number" class="form-control" name="points" value="{{ feedback.question.points }}" required>
+                            </div>
+                        </div>
+                        
+                        <div id="editOptionsSection" {% if feedback.question.question_type == 'judge' %}style="display: none;"{% endif %}>
+                            <h6 class="border-bottom pb-2 mb-3">选项设置</h6>
+                            
+                            {% for option in ['A', 'B', 'C', 'D', 'E', 'F'] %}
+                            {% set option_lower = option|lower %}
+                            {% set option_value = feedback.question['option_' + option_lower] %}
+                            {% if option_value or loop.index <= 4 %}
+                            <div class="row mb-2 edit-option-row" data-option="{{ option_lower }}">
+                                <div class="col-md-8">
+                                    <label class="form-label">选项{{ option }}</label>
+                                    <input type="text" class="form-control" name="option_{{ option_lower }}" value="{{ option_value or '' }}">
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">正确答案</label>
+                            <input type="text" class="form-control" name="correct_answer" value="{{ feedback.question.correct_answer }}" required>
+                            <small class="text-muted">单选题/判断题：填写 A、B 等；多选题：填写 AB、AC 等</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">解析</label>
+                            <textarea class="form-control" name="analysis" rows="3">{{ feedback.question.analysis or '' }}</textarea>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-primary" onclick="saveQuestionEdit()">
+                                <i class="bi bi-check-circle"></i> 保存修改
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="cancelQuestionEdit()">
+                                <i class="bi bi-x-circle"></i> 取消
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 步骤3: 处理反馈 -->
+        {% if feedback.status == 'pending' or feedback.status == 'processing' %}
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <span class="badge bg-light text-primary me-2">3</span>
+                    处理反馈
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="processFeedbackForm" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label">管理员回复 <span class="text-muted small">(将展示给用户)</span></label>
+                                <textarea name="admin_reply" class="form-control" rows="4" 
+                                          placeholder="输入回复内容，例如：感谢您的反馈，题目已修正..."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">奖励积分</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">+</span>
+                                    <input type="number" name="points_awarded" class="form-control" 
+                                           value="5" min="0" max="100">
+                                    <span class="input-group-text">积分</span>
+                                </div>
+                                <small class="text-muted">建议奖励 5-20 积分，如果反馈有价值。输入 0 表示不奖励。</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex flex-column justify-content-center gap-2">
+                            <button type="button" class="btn btn-success btn-lg" onclick="resolveFeedback()">
+                                <i class="bi bi-check-circle"></i> 标记为已解决
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="rejectFeedback()">
+                                <i class="bi bi-x-circle"></i> 拒绝反馈
+                            </button>
+                            {% if feedback.status == 'pending' %}
+                            <button type="button" class="btn btn-info" onclick="markProcessing()">
+                                <i class="bi bi-gear"></i> 标记为处理中
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-header bg-{{ 'success' if feedback.status == 'resolved' else 'secondary' }}">
+                <h5 class="mb-0 text-white">
+                    <i class="bi bi-{{ 'check-circle' if feedback.status == 'resolved' else 'x-circle' }}"></i>
+                    反馈已{{ '解决' if feedback.status == 'resolved' else '拒绝' }}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if feedback.admin_reply %}
+                <div class="mb-3">
+                    <strong>管理员回复:</strong>
+                    <div class="alert alert-info mt-2">{{ feedback.admin_reply }}</div>
+                </div>
+                {% endif %}
+                {% if feedback.points_awarded > 0 %}
+                <div class="mb-3">
+                    <strong>奖励积分:</strong>
+                    <span class="badge bg-success fs-5 ms-2">+{{ feedback.points_awarded }}</span>
+                </div>
+                {% endif %}
+                {% if feedback.resolved_at %}
+                <div class="text-muted">
+                    处理时间: {{ feedback.resolved_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                    {% if feedback.resolver %}
+                    | 处理人: {{ feedback.resolver.username }}
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleQuestionEdit() {
+    const viewMode = document.getElementById('questionViewMode');
+    const editMode = document.getElementById('questionEditMode');
+    
+    if (editMode.style.display === 'none') {
+        editMode.style.display = 'block';
+        viewMode.style.display = 'none';
+    } else {
+        editMode.style.display = 'none';
+        viewMode.style.display = 'block';
+    }
+}
+
+function saveQuestionEdit() {
+    const form = document.getElementById('editQuestionForm');
+    const formData = new FormData(form);
+    
+    fetch('{{ url_for("questions.edit", id=feedback.question_id) }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok || response.redirected) {
+            alert('题目修改成功！');
+            location.reload();
+        } else {
+            alert('修改失败，请重试');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('修改失败，请重试');
+    });
+}
+
+function cancelQuestionEdit() {
+    if (confirm('确定要取消编辑吗？未保存的修改将丢失。')) {
+        document.getElementById('questionEditMode').style.display = 'none';
+        document.getElementById('questionViewMode').style.display = 'block';
+    }
+}
+
+function resolveFeedback() {
+    if (!confirm('确定要标记为已解决吗？')) return;
+    
+    const form = document.getElementById('processFeedbackForm');
+    form.action = "{{ url_for('admin.feedback_resolve', feedback_id=feedback.id) }}";
+    form.submit();
+}
+
+function rejectFeedback() {
+    if (!confirm('确定要拒绝此反馈吗？')) return;
+    
+    const form = document.getElementById('processFeedbackForm');
+    form.action = "{{ url_for('admin.feedback_reject', feedback_id=feedback.id) }}";
+    form.submit();
+}
+
+function markProcessing() {
+    const form = document.getElementById('processFeedbackForm');
+    form.action = "{{ url_for('admin.feedback_processing', feedback_id=feedback.id) }}";
+    form.submit();
+}
+
+// 监听题型变化，显示/隐藏选项
+document.addEventListener('DOMContentLoaded', function() {
+    const questionType = document.getElementById('editQuestionType');
+    if (questionType) {
+        questionType.addEventListener('change', function() {
+            const optionsSection = document.getElementById('editOptionsSection');
+            if (this.value === 'judge') {
+                optionsSection.style.display = 'none';
+            } else {
+                optionsSection.style.display = 'block';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

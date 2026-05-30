@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}积分明细 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h4 class="mb-4"><i class="bi bi-coin"></i> 积分明细</h4>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body text-center py-3">
+                <h2 class="mb-1">{{ current_user.total_points }}</h2>
+                <p class="mb-0 small opacity-75">当前积分</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card text-white h-100" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-body text-center py-3">
+                {% if current_user.current_tier %}
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;">
+                    {% if current_user.current_tier.icon %}
+                    <img src="/static/images/tiers/{{ current_user.current_tier.icon }}" 
+                         alt="{{ current_user.current_tier.display_name }}"
+                         style="width: 28px; height: 28px;">
+                    {% endif %}
+                    <h2 class="mb-0" style="font-size: 20px;">{{ current_user.current_tier.display_name }}</h2>
+                </div>
+                {% else %}
+                <h2 class="mb-1">未定段</h2>
+                {% endif %}
+                <p class="mb-0 small opacity-75">当前段位</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-warning text-dark h-100">
+            <div class="card-body text-center py-3">
+                <h2 class="mb-1">#{{ user_rank }}</h2>
+                <p class="mb-0 small opacity-75">当前排名</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-info text-white h-100">
+            <div class="card-body text-center py-3">
+                <h2 class="mb-1">{{ records.total }}</h2>
+                <p class="mb-0 small opacity-75">总记录数</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> 积分记录</h5>
+        <small class="text-muted">最近 {{ records.total }} 条记录</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th width="160">时间</th>
+                    <th>积分来源</th>
+                    <th width="120" class="text-end">积分变动</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records.items %}
+                <tr>
+                    <td class="text-muted small">{{ record.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        {% if record.reason == 'single_correct' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-info"><i class="bi bi-person-check"></i></span>
+                                <span>单人答题正确</span>
+                            </span>
+                        {% elif record.reason == 'battle_win' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-primary"><i class="bi bi-trophy"></i></span>
+                                <span>双人对战胜利</span>
+                            </span>
+                        {% elif record.reason == 'four_first' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-warning text-dark"><i class="bi bi-trophy-fill"></i></span>
+                                <span>四人挑战冠军</span>
+                            </span>
+                        {% elif record.reason == 'four_second' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-secondary"><i class="bi bi-award"></i></span>
+                                <span>四人挑战亚军</span>
+                            </span>
+                        {% elif record.reason == 'four_third' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-secondary"><i class="bi bi-award-fill"></i></span>
+                                <span>四人挑战季军</span>
+                            </span>
+                        {% elif record.reason == 'four_fourth' or record.reason == 'four_win' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-success"><i class="bi bi-patch-check"></i></span>
+                                <span>四人挑战完赛</span>
+                            </span>
+                        {% elif record.reason == 'review_correct' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-success"><i class="bi bi-journal-check"></i></span>
+                                <span>错题复习正确</span>
+                            </span>
+                        {% elif record.reason == 'daily_login' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-primary"><i class="bi bi-calendar-check"></i></span>
+                                <span>每日登录奖励</span>
+                            </span>
+                        {% elif record.reason == 'streak_bonus' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-danger"><i class="bi bi-fire"></i></span>
+                                <span>连续答题奖励</span>
+                            </span>
+                        {% elif record.reason == 'admin_add' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-warning text-dark"><i class="bi bi-person-gear"></i></span>
+                                <span>管理员添加</span>
+                            </span>
+                        {% elif record.reason == 'admin_deduct' %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-danger"><i class="bi bi-person-x"></i></span>
+                                <span>管理员扣除</span>
+                            </span>
+                        {% else %}
+                            <span class="d-inline-flex align-items-center gap-2">
+                                <span class="badge bg-secondary"><i class="bi bi-question-circle"></i></span>
+                                <span>{{ record.REASONS.get(record.reason, record.reason) }}</span>
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if record.points > 0 %}
+                            <span class="fw-bold text-success fs-6">+{{ record.points }}</span>
+                        {% else %}
+                            <span class="fw-bold text-danger fs-6">{{ record.points }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+                        暂无积分记录
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if records.pages > 1 %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if records.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('points.my_points', page=records.prev_num) }}">
+                <i class="bi bi-chevron-left"></i> 上一页
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for page_num in records.iter_pages() %}
+            {% if page_num %}
+            <li class="page-item {% if page_num == records.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('points.my_points', page=page_num) }}">{{ page_num }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if records.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('points.my_points', page=records.next_num) }}">
+                下一页 <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

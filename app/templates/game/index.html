@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}刷题中心 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h3 class="mb-4"><i class="bi bi-controller"></i> 刷题中心</h3>
+    </div>
+</div>
+
+{% if active_game %}
+<div class="row mb-4" id="active-game-alert-row">
+    <div class="col-12">
+        <div class="alert alert-warning d-flex align-items-center" id="active-game-alert" style="border-radius: 12px; border: 2px solid #f59e0b;">
+            <i class="bi bi-exclamation-triangle-fill me-2" style="font-size: 1.2rem;"></i>
+            <span class="flex-grow-1">你有一局游戏正在进行中，是否回到对局？<span class="ms-2 text-muted" style="font-size: 0.85rem;">(<span id="game-timeout-countdown" class="fw-bold">{{ active_game_timeout_minutes }}</span>分钟后消失)</span></span>
+            <a href="{{ url_for('game.play', room_code=active_game.room.room_code) }}" class="btn btn-warning btn-sm ms-2" style="border-radius: 8px;">
+                <i class="bi bi-box-arrow-in-right"></i> 回到对局
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+// 倒计时功能
+(function() {
+    const timeoutMinutes = {{ active_game_timeout_minutes }};
+    
+    // 从服务器获取开始时间，计算剩余时间
+    fetch('/game/api/active-game')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.has_active_game || !data.started_at) return;
+            
+            // 计算已经过了多少时间
+            const startTime = new Date(data.started_at);
+            const now = new Date();
+            const elapsedSeconds = Math.floor((now - startTime) / 1000);
+            const totalSeconds = timeoutMinutes * 60;
+            let remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+            
+            const countdownElement = document.getElementById('game-timeout-countdown');
+            const alertRow = document.getElementById('active-game-alert-row');
+            
+            if (!countdownElement) return;
+            
+            function updateCountdown() {
+                if (remainingSeconds <= 0) {
+                    // 倒计时结束，重新请求API获取最新状态
+                    fetch('/game/api/active-game')
+                        .then(r => r.json())
+                        .then(newData => {
+                            if (!newData.has_active_game) {
+                                // API返回无活跃游戏，隐藏提示
+                                if (alertRow) {
+                                    alertRow.style.transition = 'opacity 0.5s ease';
+                                    alertRow.style.opacity = '0';
+                                    setTimeout(() => {
+                                        alertRow.style.display = 'none';
+                                    }, 500);
+                                }
+                            } else {
+                                // 还有活跃游戏，重新计算剩余时间
+                                if (newData.started_at) {
+                                    const newStartTime = new Date(newData.started_at);
+                                    const newElapsed = Math.floor((new Date() - newStartTime) / 1000);
+                                    remainingSeconds = Math.max(0, (newData.timeout_minutes * 60) - newElapsed);
+                                }
+                            }
+                        })
+                        .catch(() => {});
+                    return;
+                }
+                
+                const minutes = Math.floor(remainingSeconds / 60);
+                const seconds = remainingSeconds % 60;
+                
+                if (minutes > 0) {
+                    countdownElement.textContent = `${minutes}分${seconds}秒`;
+                } else {
+                    countdownElement.textContent = `${seconds}秒`;
+                }
+                
+                remainingSeconds--;
+            }
+            
+            // 立即更新一次
+            updateCountdown();
+            
+            // 每秒更新
+            setInterval(updateCountdown, 1000);
+        })
+        .catch(() => {});
+})();
+</script>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card h-100 border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-person-fill"></i> 单人挑战</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">独自挑战各类题目，按自己的节奏学习和进步。</p>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check-circle text-success"></i> 自由选择学科和难度</li>
+                    <li><i class="bi bi-check-circle text-success"></i> 答对获得积分奖励</li>
+                    <li><i class="bi bi-check-circle text-success"></i> 错题自动加入错题本</li>
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('game.single') }}" class="btn btn-primary w-100">
+                    <i class="bi bi-play-fill"></i> 开始挑战
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-people-fill"></i> 双人对战</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">与好友或随机匹配对手进行1v1答题对战。</p>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check-circle text-success"></i> 创建房间或加入房间</li>
+                    <li><i class="bi bi-check-circle text-success"></i> 实时对战，同步答题</li>
+                    <li><i class="bi bi-check-circle text-success"></i> 胜者获得额外奖励</li>
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('game.battle') }}" class="btn btn-success w-100">
+                    <i class="bi bi-play-fill"></i> 开始对战
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 border-warning">
+            <div class="card-header bg-warning text-white">
+                <h5 class="mb-0"><i class="bi bi-trophy-fill"></i> 四人挑战</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">四人同台竞技，争夺冠军宝座，赢取丰厚奖励。</p>
+                <ul class="list-unstyled">
+                    <li><i class="bi bi-check-circle text-success"></i> 4人房间竞技</li>
+                    <li><i class="bi bi-check-circle text-success"></i> 冠军亚军都有奖励</li>
+                    <li><i class="bi bi-check-circle text-success"></i> 刺激的排名竞争</li>
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('game.four') }}" class="btn btn-warning w-100">
+                    <i class="bi bi-play-fill"></i> 开始挑战
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-book"></i> 按学科刷题</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% for subject in subjects %}
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="bi {{ subject.icon or 'bi-book' }} fs-1 text-primary"></i>
+                                <h6 class="mt-2">{{ subject.name }}</h6>
+                                <small class="text-muted">{{ subject.questions.count() }} 道题目</small>
+                                <div class="mt-2">
+                                    <a href="{{ url_for('game.single', subject_id=subject.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">开始答题</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

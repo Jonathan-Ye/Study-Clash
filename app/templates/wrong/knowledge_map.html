@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}知识点掌握图谱 - Study Clash{% endblock %}
+
+{% block extra_css %}
+<style>
+.weak-card {
+    background: white; border-radius: var(--radius-lg); padding: 1.2rem;
+    box-shadow: var(--shadow); border-top: 4px solid var(--danger-color);
+    transition: all var(--transition);
+}
+.weak-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+.mastery-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; }
+.mastery-red { background: var(--danger-color); }
+.mastery-yellow { background: var(--warning-color); }
+.mastery-green { background: var(--success-color); }
+.chapter-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.7rem 1rem; border-radius: var(--radius); margin-bottom: 0.4rem;
+    background: white; transition: all var(--transition);
+}
+.chapter-item:hover { background: var(--gray-100); transform: translateX(4px); }
+.chapter-mastery-bar { width: 80px; height: 6px; border-radius: 3px; background: var(--gray-200); overflow: hidden; }
+.chapter-mastery-fill { height: 100%; border-radius: 3px; }
+.subject-accordion .accordion-button { font-weight: 600; font-size: 1.05rem; }
+.subject-accordion .accordion-button:not(.collapsed) { background: var(--gray-100); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1">🗺️ 知识点掌握图谱</h3>
+            <p class="text-muted mb-0">可视化展示各章节掌握情况，点击可直接复习</p>
+        </div>
+        <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回仪表盘
+        </a>
+    </div>
+
+    <!-- TOP3薄弱推荐 -->
+    {% if map_data.weak_top3 %}
+    <div class="row g-3 mb-4">
+        <div class="col-12"><h5 class="text-danger"><i class="bi bi-exclamation-circle"></i> 最需加强</h5></div>
+        {% for wp in map_data.weak_top3 %}
+        <div class="col-md-4">
+            <div class="weak-card">
+                <div class="fw-medium mb-1">{{ wp.chapter_name }}</div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="mastery-dot mastery-{{ wp.color }}"></span>
+                    <span class="fw-bold" style="color:{% if wp.color=='red' %}var(--danger-color){% elif wp.color=='yellow' %}var(--warning-color){% else %}var(--success-color){% endif %};">{{ wp.mastery_rate }}%</span>
+                    <span class="text-muted" style="font-size:0.8rem;">掌握率</span>
+                </div>
+                <div class="text-muted" style="font-size:0.8rem;">{{ wp.total }} 道错题 · {{ wp.mastered }} 道已掌握</div>
+                <a href="{{ url_for('wrong.review', chapter_id=wp.chapter_id) }}" class="btn btn-sm btn-outline-danger mt-2">
+                    <i class="bi bi-arrow-right"></i> 去复习
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 学科-章节树形图谱 -->
+    <div class="accordion subject-accordion" id="knowledgeAccordion">
+        {% for subject_name, chapters in map_data.subjects.items() %}
+        <div class="accordion-item mb-3" style="border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--gray-200);">
+            <h2 class="accordion-header">
+                <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#subject-{{ loop.index }}">
+                    📚 {{ subject_name }}
+                    <span class="badge bg-secondary ms-2">{{ chapters|length }} 章节</span>
+                </button>
+            </h2>
+            <div id="subject-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" data-bs-parent="#knowledgeAccordion">
+                <div class="accordion-body p-3">
+                    {% for ch in chapters %}
+                    <a href="{{ url_for('wrong.review', chapter_id=ch.chapter_id) }}" class="text-decoration-none text-dark">
+                        <div class="chapter-item">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="mastery-dot mastery-{{ ch.color }}"></span>
+                                <span class="fw-medium">{{ ch.chapter_name }}</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="chapter-mastery-bar">
+                                    <div class="chapter-mastery-fill" style="width:{{ ch.mastery_rate }}%;background:{% if ch.color=='red' %}var(--danger-color){% elif ch.color=='yellow' %}var(--warning-color){% else %}var(--success-color){% endif %};"></div>
+                                </div>
+                                <span class="fw-bold" style="font-size:0.85rem;min-width:40px;text-align:right;color:{% if ch.color=='red' %}var(--danger-color){% elif ch.color=='yellow' %}var(--warning-color){% else %}var(--success-color){% endif %};">{{ ch.mastery_rate }}%</span>
+                                <span class="text-muted" style="font-size:0.75rem;">{{ ch.total }}题</span>
+                                <i class="bi bi-chevron-right text-muted" style="font-size:0.75rem;"></i>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

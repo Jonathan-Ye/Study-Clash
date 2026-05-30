@@ -1,0 +1,568 @@
+{% extends "admin/base.html" %}
+
+{% block title %}段位管理 - 管理后台{% endblock %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-award"></i> 段位管理</h2>
+    <div>
+        <button class="btn btn-outline-success" onclick="resetToDefault()">
+            <i class="bi bi-arrow-clockwise"></i> 恢复默认设置
+        </button>
+        <button class="btn btn-info text-white" onclick="showDistribution()">
+            <i class="bi bi-bar-chart-line"></i> 段位分布
+        </button>
+        <button class="btn btn-warning" onclick="recalculateAll()">
+            <i class="bi bi-arrow-repeat"></i> 批量重算
+        </button>
+        <button class="btn btn-primary" onclick="createTier()">
+            <i class="bi bi-plus-lg"></i> 新增段位
+        </button>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> 段位配置列表</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped" id="tiersTable">
+                <thead class="thead-dark">
+                    <tr>
+                        <th width="50">ID</th>
+                        <th width="60">图标</th>
+                        <th>段位名称</th>
+                        <th width="70">子段位</th>
+                        <th width="90">最低积分</th>
+                        <th width="90">最高积分</th>
+                        <th width="80">颜色</th>
+                        <th width="70">人数</th>
+                        <th width="70">状态</th>
+                        <th width="100">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tier in tiers %}
+                    <tr data-tier-id="{{ tier.id }}">
+                        <td>{{ tier.id }}</td>
+                        <td>
+                            {% if tier.icon %}
+                            <img src="/static/images/tiers/{{ tier.icon }}" 
+                                 alt="{{ tier.display_name }}" 
+                                 style="width: 36px; height: 36px;">
+                            {% else %}
+                            <span class="badge bg-secondary">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong style="color: {{ tier.color }};">{{ tier.tier_name }}</strong>
+                        </td>
+                        <td>{{ tier.sub_tier }}</td>
+                        <td>{{ tier.min_points }}</td>
+                        <td>{{ tier.max_points if tier.max_points else '∞' }}</td>
+                        <td>
+                            {% if tier.color %}
+                            <span class="badge" 
+                                  style="background-color: {{ tier.color }}; color: white; padding: 4px 10px; font-size: 11px;">
+                                {{ tier.color }}
+                            </span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ distribution.get(tier.id, 0) }}人</span>
+                        </td>
+                        <td>
+                            {% if tier.is_active %}
+                            <span class="badge bg-success">启用</span>
+                            {% else %}
+                            <span class="badge bg-secondary">禁用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" 
+                                        onclick="editTier({{ tier.id }})"
+                                        title="编辑">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-outline-danger delete-tier-btn" 
+                                        data-tier-id="{{ tier.id }}"
+                                        data-tier-name="{{ tier.display_name }}"
+                                        data-user-count="{{ distribution.get(tier.id, 0) }}"
+                                        title="删除">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {% if not tiers %}
+        <div class="text-center py-5">
+            <i class="bi bi-award" style="font-size: 48px; color: #ccc;"></i>
+            <p class="text-muted mt-3">暂无段位配置</p>
+            <button class="btn btn-primary" onclick="initDefaultTiers()">
+                <i class="bi bi-magic"></i> 初始化默认段位
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 编辑/新增弹窗 -->
+<div class="modal fade" id="tierModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="tierModalTitle">新增段位</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="tierForm" onsubmit="saveTier(event)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <input type="hidden" id="tierId" value="">
+                    
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="tierName"><strong>段位名称 *</strong></label>
+                            <input type="text" class="form-control" id="tierName" required
+                                   placeholder="如：青铜、白银、黄金...">
+                        </div>
+                        
+                        <div class="col-md-3 form-group">
+                            <label for="subTier"><strong>子段位 *</strong></label>
+                            <select class="form-control" id="subTier" required>
+                                <option value="III">III (低)</option>
+                                <option value="II">II (中)</option>
+                                <option value="I">I (高)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3 form-group">
+                            <label for="tierOrder"><strong>排序权重 *</strong></label>
+                            <input type="number" class="form-control" id="tierOrder" required
+                                   min="1" max="20" placeholder="1-20">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="minPoints"><strong>最低积分 *</strong></label>
+                            <input type="number" class="form-control" id="minPoints" required
+                                   min="0" placeholder="0">
+                        </div>
+                        
+                        <div class="col-md-6 form-group">
+                            <label for="maxPoints"><strong>最高积分</strong></label>
+                            <input type="number" class="form-control" id="maxPoints"
+                                   min="0" placeholder="留空表示无上限">
+                            <small class="form-text text-muted">传奇段位请留空（无限）</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="icon">图标文件名</label>
+                            <input type="text" class="form-control" id="icon"
+                                   placeholder="如：bronze_3.svg">
+                            <small class="form-text text-muted">SVG文件位于 /static/images/tiers/</small>
+                        </div>
+                        
+                        <div class="col-md-6 form-group">
+                            <label for="color">主题色</label>
+                            <div class="input-group">
+                                <input type="color" class="form-control form-control-color" id="colorPicker" 
+                                       value="#CD7F32" style="width: 50px; height: 38px;">
+                                <input type="text" class="form-control" id="color" 
+                                       placeholder="#CD7F32" value="#CD7F32">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">描述</label>
+                        <textarea class="form-control" id="description" rows="2"
+                                  placeholder="段位描述文字..."></textarea>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="isActive" checked>
+                        <label class="form-check-label" for="isActive">
+                            启用此段位
+                        </label>
+                    </div>
+                    
+                    <div id="warningBox" class="alert alert-warning mt-3" style="display: none;">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <strong>警告：</strong>修改积分范围将影响当前用户段位，保存后建议执行批量重算。
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> 保存更改
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 分布统计弹窗 -->
+<div class="modal fade" id="distributionModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-bar-chart-line"></i> 段位分布统计</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="distributionContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2 text-muted">正在加载数据...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let originalMinPoints = null;
+let originalMaxPoints = null;
+const csrfToken = '{{ csrf_token() }}';
+
+function createTier() {
+    document.getElementById('tierModalTitle').textContent = '新增段位';
+    document.getElementById('tierForm').reset();
+    document.getElementById('tierId').value = '';
+    document.getElementById('isActive').checked = true;
+    document.getElementById('color').value = '#CD7F32';
+    document.getElementById('colorPicker').value = '#CD7F32';
+    originalMinPoints = null;
+    originalMaxPoints = null;
+    document.getElementById('warningBox').style.display = 'none';
+    
+    var modal = new bootstrap.Modal(document.getElementById('tierModal'));
+    modal.show();
+}
+
+function editTier(tierId) {
+    fetch('/admin/rank-tiers/api/tiers/' + tierId, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        document.getElementById('tierModalTitle').textContent = '编辑段位 - ' + data.display_name;
+        document.getElementById('tierId').value = data.id;
+        document.getElementById('tierName').value = data.tier_name;
+        document.getElementById('subTier').value = data.sub_tier;
+        document.getElementById('tierOrder').value = data.tier_order;
+        document.getElementById('minPoints').value = data.min_points;
+        document.getElementById('maxPoints').value = data.max_points || '';
+        document.getElementById('icon').value = data.icon || '';
+        document.getElementById('color').value = data.color || '#CCCCCC';
+        document.getElementById('colorPicker').value = data.color || '#CCCCCC';
+        document.getElementById('description').value = data.description || '';
+        document.getElementById('isActive').checked = data.is_active;
+        
+        originalMinPoints = data.min_points;
+        originalMaxPoints = data.max_points;
+        
+        checkPointsChange();
+        
+        var modal = new bootstrap.Modal(document.getElementById('tierModal'));
+        modal.show();
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        alert('加载数据失败');
+    });
+}
+
+function saveTier(event) {
+    event.preventDefault();
+    
+    var tierId = document.getElementById('tierId').value;
+    var data = {
+        tier_name: document.getElementById('tierName').value,
+        sub_tier: document.getElementById('subTier').value,
+        tier_order: parseInt(document.getElementById('tierOrder').value),
+        min_points: parseInt(document.getElementById('minPoints').value),
+        max_points: document.getElementById('maxPoints').value ? parseInt(document.getElementById('maxPoints').value) : null,
+        icon: document.getElementById('icon').value,
+        color: document.getElementById('color').value,
+        description: document.getElementById('description').value,
+        is_active: document.getElementById('isActive').checked
+    };
+    
+    var url = tierId ? '/admin/rank-tiers/api/tiers/' + tierId : '/admin/rank-tiers/api/tiers';
+    var method = tierId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify(data)
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.error) {
+            alert(result.error);
+            return;
+        }
+        
+        if (result.recalculate_needed) {
+            if (confirm('积分范围已修改，是否立即重算所有用户的段位？')) {
+                recalculateAll();
+            }
+        }
+        
+        alert(result.message);
+        location.reload();
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        alert('操作失败');
+    });
+}
+
+function deleteTier(tierId, displayName, userCount) {
+    var confirmMsg = '确定要删除段位 "' + displayName + '" 吗？此操作不可恢复！';
+    
+    if (userCount > 0) {
+        confirmMsg = '确定要删除段位 "' + displayName + '" 吗？\n\n删除后，' + userCount + ' 名处于该段位的用户将变为"未定段"。\n\n此操作不可恢复！';
+    }
+    
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    fetch('/admin/rank-tiers/api/tiers/' + tierId, {
+        method: 'DELETE'
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+        }
+        return response.text().then(function(text) {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                throw new Error('服务器返回了非 JSON 数据: ' + text.substring(0, 200));
+            }
+        });
+    })
+    .then(function(result) {
+        if (result.error) {
+            alert(result.error);
+            return;
+        }
+        alert(result.message);
+        location.reload();
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        alert('删除失败：' + error.message);
+    });
+}
+
+// 事件委托：处理删除按钮点击
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.delete-tier-btn');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    
+    var tierId = parseInt(btn.getAttribute('data-tier-id'));
+    var tierName = btn.getAttribute('data-tier-name');
+    var userCount = parseInt(btn.getAttribute('data-user-count')) || 0;
+    
+    deleteTier(tierId, tierName, userCount);
+});
+
+function recalculateAll(skipConfirm) {
+    if (!skipConfirm && !confirm('确定要重新计算所有用户的段位吗？\n\n这将根据当前段位配置更新所有用户的段位，可能需要几秒钟。')) {
+        return;
+    }
+    
+    // 如果 event 可用，使用按钮显示加载状态
+    var btn = null;
+    try {
+        btn = event.target.closest('button') || event.target;
+    } catch (e) { /* event 不可用，跳过 */ }
+    
+    if (btn && btn.tagName === 'BUTTON') {
+        var originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>重算中...';
+    }
+    
+    fetch('/admin/rank-tiers/api/recalculate', {
+        method: 'POST'
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.error) {
+            alert(result.error);
+        } else {
+            alert(result.message + '\n\n总用户数: ' + result.total_users + '\n影响用户数: ' + result.affected_users + '\n处理时间: ' + result.processing_time);
+            location.reload();
+        }
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        alert('重算失败');
+    })
+    .finally(function() {
+        if (btn && btn.tagName === 'BUTTON') {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    });
+}
+
+function showDistribution() {
+    var modal = new bootstrap.Modal(document.getElementById('distributionModal'));
+    modal.show();
+    
+    fetch('/admin/rank-tiers/api/distribution', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        var html = '<table class="table table-striped">';
+        html += '<thead><tr><th>段位</th><th>人数</th><th>占比</th><th>分布图</th></tr></thead><tbody>';
+        
+        var totalUsers = data.total_users || 1;
+        
+        data.distribution.forEach(function(item) {
+            var percent = ((item.count / totalUsers) * 100).toFixed(1);
+            var barWidth = Math.min((item.count / totalUsers) * 100, 100);
+            
+            html += '<tr>';
+            html += '<td><strong>' + item.display_name + '</strong></td>';
+            html += '<td>' + item.count + '</td>';
+            html += '<td>' + percent + '%</td>';
+            html += '<td><div class="progress" style="height: 20px;">';
+            html += '<div class="progress-bar progress-bar-striped progress-bar-animated" style="width: ' + barWidth + '%"></div>';
+            html += '</div></td>';
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        html += '<p class="mt-3"><strong>总用户数：</strong>' + data.total_users + '</p>';
+        
+        document.getElementById('distributionContent').innerHTML = html;
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        document.getElementById('distributionContent').innerHTML = '<p class="text-danger">加载失败</p>';
+    });
+}
+
+function initDefaultTiers() {
+    if (!confirm('确定要初始化默认的24个段位配置吗？\n\n这将创建青铜到传奇的所有段位设置。')) {
+        return;
+    }
+    
+    fetch('/admin/rank-tiers/api/init-default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({})
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        alert(result.message);
+        location.reload();
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        alert('初始化失败');
+    });
+}
+
+function resetToDefault() {
+    if (!confirm('确定要恢复系统默认段位设置吗？\n\n此操作将：\n1. 删除所有现有段位配置\n2. 重新创建默认段位（青铜到传奇）\n3. 已分配的用户段位不会自动重置，建议随后执行"批量重算"\n\n此操作不可恢复！')) {
+        return;
+    }
+    
+    fetch('/admin/rank-tiers/api/init-default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true })
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+        }
+        return response.text().then(function(text) {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                throw new Error('服务器返回了非 JSON 数据: ' + text.substring(0, 200));
+            }
+        });
+    })
+    .then(function(result) {
+        alert(result.message);
+        if (confirm('段位已恢复，是否立即重算所有用户段位？')) {
+            recalculateAll(true);
+        } else {
+            location.reload();
+        }
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        alert('恢复失败：' + error.message);
+    });
+}
+
+// 颜色选择器同步
+document.addEventListener('DOMContentLoaded', function() {
+    var colorPicker = document.getElementById('colorPicker');
+    var colorInput = document.getElementById('color');
+    
+    if (colorPicker && colorInput) {
+        colorPicker.addEventListener('input', function(e) {
+            colorInput.value = e.target.value;
+        });
+
+        colorInput.addEventListener('input', function(e) {
+            if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+                colorPicker.value = e.target.value;
+            }
+        });
+
+        // 积分变化检测
+        var minPtsInput = document.getElementById('minPoints');
+        var maxPtsInput = document.getElementById('maxPoints');
+        
+        if (minPtsInput) minPtsInput.addEventListener('change', checkPointsChange);
+        if (maxPtsInput) maxPtsInput.addEventListener('change', checkPointsChange);
+    }
+});
+
+function checkPointsChange() {
+    var currentMin = parseInt(document.getElementById('minPoints').value);
+    var currentMax = document.getElementById('maxPoints').value ? parseInt(document.getElementById('maxPoints').value) : null;
+    
+    if (originalMinPoints !== null && originalMaxPoints !== null) {
+        if (currentMin !== originalMinPoints || currentMax !== originalMaxPoints) {
+            document.getElementById('warningBox').style.display = 'block';
+        } else {
+            document.getElementById('warningBox').style.display = 'none';
+        }
+    } else {
+        document.getElementById('warningBox').style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,333 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}学生分析{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <!-- 页面标题 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4><i class="bi bi-mortarboard"></i> 学生分析</h4>
+        </div>
+    </div>
+
+    <!-- 筛选控制栏 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <!-- 分类维度切换 -->
+                        <div class="col-md-4">
+                            <ul class="nav nav-pills" id="categoryTabs">
+                                <li class="nav-item">
+                                    <a class="nav-link active" href="#" data-category="class_name">
+                                        <i class="bi bi-people-fill"></i> 按班级分类
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" data-category="major">
+                                        <i class="bi bi-bookmark-fill"></i> 按专业分类
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- 时间范围 -->
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="timeRange">
+                                <option value="all">全部时间</option>
+                                <option value="7d">近7天</option>
+                                <option value="30d">近30天</option>
+                                <option value="90d">近90天</option>
+                            </select>
+                        </div>
+                        <!-- 排序 -->
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="sortBy">
+                                <option value="student_count">按学生人数排序</option>
+                                <option value="avg_accuracy">按平均正确率排序</option>
+                                <option value="avg_points">按平均积分排序</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 概览卡片区域 -->
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> 分类概览 <small class="text-muted" id="overviewCount"></small></h5>
+            <button class="btn btn-sm btn-outline-secondary d-none" id="toggleOverviewBtn">
+                <i class="bi bi-chevron-down"></i> 展开更多
+            </button>
+        </div>
+        <div class="col-12" id="overviewContainer">
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-arrow-repeat fs-1"></i>
+                <p class="mt-2">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 对比分析区域 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart-steps"></i> 对比分析</h5>
+                    <div class="btn-group btn-group-sm" id="metricBtnGroup">
+                        <button class="btn btn-outline-primary active" data-metric="avg_accuracy">平均正确率</button>
+                        <button class="btn btn-outline-primary" data-metric="avg_points">平均积分</button>
+                        <button class="btn btn-outline-primary" data-metric="avg_games">平均游戏场次</button>
+                        <button class="btn btn-outline-primary" data-metric="active_ratio">活跃学生比例</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div style="height:350px;overflow-x:auto;overflow-y:hidden;">
+                        <div id="compareChartWrapper" style="min-height:350px;">
+                            <canvas id="compareChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+(function() {
+    let currentCategory = 'class_name';
+    let currentTimeRange = 'all';
+    let currentSortBy = 'student_count';
+    let currentMetric = 'avg_accuracy';
+    let compareChart = null;
+    let allCategories = [];
+    let overviewExpanded = false;
+    const OVERVIEW_COLLAPSED_COUNT = 12; // 默认显示12个卡片
+
+    const overviewUrl = '{{ url_for("admin.api_overview") }}';
+    const compareUrl = '{{ url_for("admin.api_compare") }}';
+
+    // 分类维度切换
+    document.querySelectorAll('#categoryTabs .nav-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('#categoryTabs .nav-link').forEach(function(l) { l.classList.remove('active'); });
+            this.classList.add('active');
+            currentCategory = this.dataset.category;
+            overviewExpanded = false;
+            loadOverview();
+            loadCompare();
+        });
+    });
+
+    // 时间范围切换
+    document.getElementById('timeRange').addEventListener('change', function() {
+        currentTimeRange = this.value;
+        overviewExpanded = false;
+        loadOverview();
+        loadCompare();
+    });
+
+    // 排序切换
+    document.getElementById('sortBy').addEventListener('change', function() {
+        currentSortBy = this.value;
+        overviewExpanded = false;
+        loadOverview();
+    });
+
+    // 对比指标切换
+    document.querySelectorAll('#metricBtnGroup button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('#metricBtnGroup button').forEach(function(b) { b.classList.remove('active'); });
+            this.classList.add('active');
+            currentMetric = this.dataset.metric;
+            loadCompare();
+        });
+    });
+
+    // 展开/收起按钮
+    document.getElementById('toggleOverviewBtn').addEventListener('click', function() {
+        overviewExpanded = !overviewExpanded;
+        renderOverviewCards();
+    });
+
+    function loadOverview() {
+        document.getElementById('overviewContainer').innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-arrow-repeat fs-1"></i><p class="mt-2">加载中...</p></div>';
+
+        const params = new URLSearchParams({
+            category: currentCategory,
+            time_range: currentTimeRange,
+            sort_by: currentSortBy
+        });
+
+        fetch(overviewUrl + '?' + params.toString())
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                allCategories = data.categories || [];
+                renderOverviewCards();
+            })
+            .catch(function() {
+                document.getElementById('overviewContainer').innerHTML = '<div class="text-center text-danger py-5"><i class="bi bi-exclamation-triangle fs-1"></i><p class="mt-2">数据加载失败，请稍后重试</p></div>';
+            });
+    }
+
+    function renderOverviewCards() {
+        const categories = allCategories;
+        if (!categories || categories.length === 0) {
+            const label = currentCategory === 'class_name' ? '班级' : '专业';
+            document.getElementById('overviewContainer').innerHTML =
+                '<div class="text-center text-muted py-5">' +
+                '<i class="bi bi-inbox fs-1"></i>' +
+                '<p class="mt-2">暂无分类数据，请先在字典管理中配置' + label + '信息</p>' +
+                '</div>';
+            document.getElementById('overviewCount').textContent = '';
+            document.getElementById('toggleOverviewBtn').classList.add('d-none');
+            return;
+        }
+
+        // 显示总数
+        document.getElementById('overviewCount').textContent = '（共' + categories.length + '个）';
+
+        // 决定显示多少个
+        const showAll = overviewExpanded || categories.length <= OVERVIEW_COLLAPSED_COUNT;
+        const displayCategories = showAll ? categories : categories.slice(0, OVERVIEW_COLLAPSED_COUNT);
+
+        // 展开/收起按钮
+        const toggleBtn = document.getElementById('toggleOverviewBtn');
+        if (categories.length > OVERVIEW_COLLAPSED_COUNT) {
+            toggleBtn.classList.remove('d-none');
+            if (overviewExpanded) {
+                toggleBtn.innerHTML = '<i class="bi bi-chevron-up"></i> 收起';
+            } else {
+                toggleBtn.innerHTML = '<i class="bi bi-chevron-down"></i> 展开更多（还有' + (categories.length - OVERVIEW_COLLAPSED_COUNT) + '个）';
+            }
+        } else {
+            toggleBtn.classList.add('d-none');
+        }
+
+        let html = '<div class="row g-3">';
+        displayCategories.forEach(function(cat) {
+            const accuracyDisplay = cat.avg_accuracy !== null ? cat.avg_accuracy + '%' : '--';
+            const noStudent = cat.student_count === 0;
+            const cardClass = noStudent ? 'card border-0 shadow-sm opacity-50' : 'card border-0 shadow-sm';
+            const categoryPath = currentCategory === 'class_name' ? 'class' : 'major';
+            const clickAction = noStudent ? '' : 'onclick="window.location.href=\'/admin/student-analysis/' + categoryPath + '/' + encodeURIComponent(cat.name) + '\'" style="cursor:pointer"';
+
+            html += '<div class="col-sm-6 col-md-4 col-lg-3 col-xl-2">';
+            html += '<div class="' + cardClass + '" ' + clickAction + '>';
+            html += '<div class="card-body p-2">';
+            html += '<h6 class="card-title mb-2" style="font-size:0.9rem;"><i class="bi bi-' + (currentCategory === 'class_name' ? 'people' : 'bookmark') + '"></i> ' + cat.name + '</h6>';
+
+            if (noStudent) {
+                html += '<p class="text-muted mb-0" style="font-size:0.8rem;">暂无学生</p>';
+            } else {
+                html += '<div class="row g-1" style="font-size:0.8rem;">';
+                html += '<div class="col-6"><small class="text-muted">人数</small><div class="fw-bold">' + cat.student_count + '</div></div>';
+                html += '<div class="col-6"><small class="text-muted">正确率</small><div class="fw-bold">' + accuracyDisplay + '</div></div>';
+                html += '<div class="col-6"><small class="text-muted">积分</small><div class="fw-bold">' + cat.avg_points + '</div></div>';
+                html += '<div class="col-6"><small class="text-muted">游戏</small><div class="fw-bold">' + cat.avg_games + '</div></div>';
+                html += '<div class="col-6"><small class="text-muted">活跃</small><div class="fw-bold">' + cat.active_count + '</div></div>';
+                html += '<div class="col-6"><small class="text-muted">比例</small><div class="fw-bold">' + cat.active_ratio + '%</div></div>';
+                html += '</div>';
+            }
+
+            html += '</div></div></div>';
+        });
+        html += '</div>';
+        document.getElementById('overviewContainer').innerHTML = html;
+    }
+
+    function loadCompare() {
+        const params = new URLSearchParams({
+            category: currentCategory,
+            metric: currentMetric,
+            time_range: currentTimeRange
+        });
+
+        fetch(compareUrl + '?' + params.toString())
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderCompare(data); })
+            .catch(function() {});
+    }
+
+    function renderCompare(data) {
+        const items = data.items;
+        const labels = items.map(function(item) { return item.name; });
+        const values = items.map(function(item) { return item.value; });
+        const count = labels.length;
+
+        // 动态计算图表宽度：数量多时加宽以支持水平滚动
+        const wrapper = document.getElementById('compareChartWrapper');
+        const minBarWidth = 50; // 每个柱子至少50px宽
+        const chartWidth = Math.max(wrapper.parentElement.clientWidth, count * minBarWidth + 80);
+        wrapper.style.width = chartWidth + 'px';
+
+        const ctx = document.getElementById('compareChart').getContext('2d');
+
+        // 生成足够多的颜色
+        const baseColors = [
+            'rgba(54, 162, 235, 0.7)', 'rgba(255, 99, 132, 0.7)',
+            'rgba(75, 192, 192, 0.7)', 'rgba(255, 159, 64, 0.7)',
+            'rgba(153, 102, 255, 0.7)', 'rgba(255, 205, 86, 0.7)',
+            'rgba(201, 203, 207, 0.7)', 'rgba(54, 162, 235, 0.5)',
+            'rgba(255, 99, 71, 0.7)', 'rgba(60, 179, 113, 0.7)',
+            'rgba(238, 130, 238, 0.7)', 'rgba(100, 149, 237, 0.7)'
+        ];
+        const colors = [];
+        const borderColors = [];
+        for (let i = 0; i < count; i++) {
+            colors.push(baseColors[i % baseColors.length]);
+            borderColors.push(colors[i].replace('0.7', '1').replace('0.5', '1'));
+        }
+
+        if (compareChart) {
+            compareChart.destroy();
+        }
+
+        // 数量多时x轴标签旋转，数量少时正常显示
+        const needRotation = count > 8;
+
+        compareChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: data.metric_label,
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: borderColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            maxRotation: needRotation ? 45 : 0,
+                            minRotation: needRotation ? 45 : 0,
+                            autoSkip: false
+                        }
+                    },
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // 初始加载
+    loadOverview();
+    loadCompare();
+})();
+</script>
+{% endblock %}

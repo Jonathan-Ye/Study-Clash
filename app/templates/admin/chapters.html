@@ -1,0 +1,334 @@
+{% extends 'admin/base.html' %}
+{% block extra_css %}
+{{ super() }}
+<style>
+.subject-section {
+    margin-bottom: 24px;
+}
+.subject-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 16px 20px;
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.subject-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+.subject-body {
+    border: 1px solid #e9ecef;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    padding: 16px;
+    background: #fafbfc;
+}
+.chapter-tree {
+    list-style: none;
+    padding-left: 0;
+}
+.chapter-item {
+    margin: 4px 0;
+}
+.chapter-card {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+}
+.chapter-card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.chapter-card.level-1 { border-left: 4px solid #0d6efd; }
+.chapter-card.level-2 { border-left: 4px solid #198754; margin-left: 24px; }
+.chapter-card.level-3 { border-left: 4px solid #fd7e14; margin-left: 48px; }
+.chapter-handle {
+    cursor: grab;
+    color: #adb5bd;
+    font-size: 16px;
+}
+.chapter-handle:active { cursor: grabbing; }
+.chapter-info { flex: 1; }
+.chapter-name { font-weight: 500; }
+.chapter-meta { font-size: 12px; color: #6c757d; }
+.chapter-actions { display: flex; gap: 6px; }
+.level-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+.level-1 .level-badge { background: #cfe2ff; color: #0d6efd; }
+.level-2 .level-badge { background: #d1e7dd; color: #198754; }
+.level-3 .level-badge { background: #fff3cd; color: #fd7e14; }
+.children-container { margin-left: 20px; }
+.sortable-ghost { opacity: 0.4; background: #e3f2fd; }
+.sortable-chosen { background: #fff3e0; }
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #6c757d;
+}
+.empty-state i { font-size: 48px; margin-bottom: 12px; color: #dee2e6; }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-journal-bookmark"></i> 章节管理</h4>
+        <div class="d-flex gap-2">
+            <select name="subject_id" class="form-select" onchange="window.location.href='{{ url_for('admin.chapters') }}?subject_id=' + this.value" style="width: 200px;">
+                <option value="">所有学科</option>
+                {% for subject in subjects %}
+                <option value="{{ subject.id }}" {{ 'selected' if selected_subject_id|int == subject.id }}>
+                    {{ subject.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <a href="{{ url_for('admin.chapter_export') }}" class="btn btn-outline-success" title="章节导出">
+                <i class="bi bi-download"></i> 导出
+            </a>
+            <a href="{{ url_for('admin.chapter_import') }}" class="btn btn-outline-info" title="章节导入">
+                <i class="bi bi-upload"></i> 导入
+            </a>
+            <button type="button" class="btn btn-primary" onclick="openCreateModal()">
+                <i class="bi bi-plus-lg"></i> 创建章节
+            </button>
+        </div>
+    </div>
+
+    {% if chapters_by_subject %}
+        {% for subject_id, subject_data in chapters_by_subject.items() %}
+        <div class="subject-section">
+            <div class="subject-header">
+                <h5><i class="bi bi-book me-2"></i>{{ subject_data.subject.name }}</h5>
+                <span class="badge bg-light text-dark">{{ subject_data.chapters|length }} 章节</span>
+            </div>
+            <div class="subject-body">
+                <div class="chapter-tree" id="chapterTree-{{ subject_id }}" data-parent-id="0">
+                    {% for chapter in subject_data.chapters if chapter.level == 1 or chapter.level is none %}
+                    <div class="chapter-item" data-chapter-id="{{ chapter.id }}" data-level="{{ chapter.level or 1 }}">
+                        <div class="chapter-card level-{{ chapter.level or 1 }}">
+                            <i class="bi bi-arrow-left-right chapter-handle"></i>
+                            <span class="level-badge">{{ chapter.get_level_name() if chapter.level else '章' }}</span>
+                            <div class="chapter-info">
+                                <div class="chapter-name">{{ chapter.name }}</div>
+                            </div>
+                            <div class="chapter-actions">
+                                <button class="btn btn-sm btn-outline-secondary add-child-btn" data-chapter-id="{{ chapter.id }}" data-level="2" data-subject-id="{{ subject_id }}" title="添加下级章节">
+                                    <i class="bi bi-plus"></i>
+                                </button>
+                                <a href="{{ url_for('admin.edit_chapter', id=chapter.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="POST" action="{{ url_for('admin.delete_chapter', id=chapter.id) }}" style="display: inline;" onsubmit="return confirm('确定删除该章节吗？')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="children-container" data-parent-id="{{ chapter.id }}">
+                            {% for child2 in subject_data.all_chapters if child2.parent_id == chapter.id %}
+                            <div class="chapter-item" data-chapter-id="{{ child2.id }}" data-level="{{ child2.level }}">
+                                <div class="chapter-card level-{{ child2.level }}">
+                                    <i class="bi bi-arrow-left-right chapter-handle"></i>
+                                    <span class="level-badge">{{ child2.get_level_name() }}</span>
+                                    <div class="chapter-info">
+                                        <div class="chapter-name">{{ child2.name }}</div>
+                                    </div>
+                                    <div class="chapter-actions">
+                                        <button class="btn btn-sm btn-outline-secondary add-child-btn" data-chapter-id="{{ child2.id }}" data-level="3" data-subject-id="{{ subject_id }}" title="添加下级章节">
+                                            <i class="bi bi-plus"></i>
+                                        </button>
+                                        <a href="{{ url_for('admin.edit_chapter', id=child2.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <form method="POST" action="{{ url_for('admin.delete_chapter', id=child2.id) }}" style="display: inline;" onsubmit="return confirm('确定删除该章节吗？')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="children-container" data-parent-id="{{ child2.id }}">
+                                    {% for child3 in subject_data.all_chapters if child3.parent_id == child2.id %}
+                                    <div class="chapter-item" data-chapter-id="{{ child3.id }}" data-level="{{ child3.level }}">
+                                        <div class="chapter-card level-{{ child3.level }}">
+                                            <i class="bi bi-arrow-left-right chapter-handle"></i>
+                                            <span class="level-badge">{{ child3.get_level_name() }}</span>
+                                            <div class="chapter-info">
+                                                <div class="chapter-name">{{ child3.name }}</div>
+                                            </div>
+                                            <div class="chapter-actions">
+                                                <a href="{{ url_for('admin.edit_chapter', id=child3.id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                                <form method="POST" action="{{ url_for('admin.delete_chapter', id=child3.id) }}" style="display: inline;" onsubmit="return confirm('确定删除该章节吗？')">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-inbox"></i>
+        <p>{% if selected_subject_id %}该学科暂无章节，点击"创建章节"添加{% else %}暂无章节数据{% endif %}</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="createChapterModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createChapterModalLabel"><i class="bi bi-plus-lg"></i> 创建章节</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.create_chapter') }}" id="createChapterForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <input type="hidden" name="parent_id" id="modal_parent_id" value="">
+                    <input type="hidden" name="subject_id" id="modal_subject_id" value="{{ selected_subject_id or '' }}">
+                    <div class="mb-3">
+                        <label class="form-label">上级章节</label>
+                        <input type="text" id="modal_parent_name" class="form-control" readonly placeholder="一级章节（最高级别）">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">章节名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="modal_name" class="form-control" required>
+                    </div>
+                    <input type="hidden" name="order" id="modal_order" value="0">
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea name="description" id="modal_description" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="is_active" id="modal_is_active" class="form-check-input" checked>
+                        <label class="form-check-label" for="modal_is_active">启用</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> 创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script src="{{ url_for('static', filename='lib/sortablejs/Sortable.min.js') }}"></script>
+<script>
+function openCreateModal(parentId, parentName, level, subjectId) {
+    document.getElementById('modal_parent_id').value = parentId || '';
+    document.getElementById('modal_parent_name').value = parentName || '';
+    document.getElementById('modal_subject_id').value = subjectId || '{{ selected_subject_id or "" }}';
+    document.getElementById('modal_name').value = '';
+    document.getElementById('modal_order').value = '0';
+    document.getElementById('modal_description').value = '';
+    document.getElementById('modal_is_active').checked = true;
+    
+    var levelNames = {1: '章', 2: '节', 3: '小节'};
+    var title = parentId ? '创建' + levelNames[level] : '创建章节';
+    document.getElementById('createChapterModalLabel').innerHTML = '<i class="bi bi-plus-lg"></i> ' + title;
+    
+    var modal = new bootstrap.Modal(document.getElementById('createChapterModal'));
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.add-child-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var chapterId = this.getAttribute('data-chapter-id');
+            var level = parseInt(this.getAttribute('data-level'));
+            var subjectId = this.getAttribute('data-subject-id');
+            var levelNames = {2: '节', 3: '小节'};
+            openCreateModal(chapterId, '作为下级 ' + levelNames[level] + ' 创建', level, subjectId);
+        });
+    });
+
+    function initSortable(container) {
+        if (!container) return;
+        // 每个容器使用独立的group，禁止跨层级拖动
+        // 同级章节只能在各自容器内排序，避免缩进错乱
+        var groupId = 'chapters-' + (container.id || container.getAttribute('data-parent-id') || Math.random().toString(36).substr(2, 9));
+        new Sortable(container, {
+            handle: '.chapter-handle',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            animation: 150,
+            group: groupId,
+            onEnd: function(evt) {
+                saveOrder();
+            }
+        });
+    }
+
+    function saveOrder() {
+        // 按每个排序容器（chapter-tree 和 children-container）分别计算order
+        // 每个容器内的章节共享同一个递增index，避免跨层级order冲突
+        var allContainers = document.querySelectorAll('.chapter-tree, .children-container');
+        allContainers.forEach(function(container) {
+            var chaptersData = [];
+            container.querySelectorAll(':scope > .chapter-item').forEach(function(item, index) {
+                var chapterId = parseInt(item.getAttribute('data-chapter-id'));
+                var level = parseInt(item.getAttribute('data-level'));
+                // 从父容器获取parent_id
+                var parentId = container.getAttribute('data-parent-id');
+                chaptersData.push({
+                    id: chapterId,
+                    order: index,
+                    level: level,
+                    parent_id: parentId ? parseInt(parentId) : 0
+                });
+            });
+
+            if (chaptersData.length > 0) {
+                fetch('{{ url_for("admin.reorder_chapters") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({chapters: chaptersData})
+                }).then(function(response) {
+                    return response.json();
+                }).then(function(data) {
+                    if (!data.success) {
+                        console.error('排序保存失败:', data.error);
+                    }
+                }).catch(function(err) {
+                    console.error('排序保存请求失败:', err);
+                });
+            }
+        });
+    }
+
+    document.querySelectorAll('.chapter-tree').forEach(initSortable);
+    document.querySelectorAll('.children-container').forEach(initSortable);
+});
+</script>
+{% endblock %}

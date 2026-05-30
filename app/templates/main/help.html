@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}使用帮助 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-question-circle"></i> 使用帮助</h4>
+            </div>
+            <div class="card-body">
+                <div class="accordion" id="helpAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#help1">
+                                如何开始答题？
+                            </button>
+                        </h2>
+                        <div id="help1" class="accordion-collapse collapse show" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>登录账号后，点击导航栏的"刷题"</li>
+                                    <li>选择游戏模式：单人挑战、双人对战或四人挑战</li>
+                                    <li>选择学科、难度和题目数量</li>
+                                    <li>点击"开始"即可开始答题</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#help2">
+                                积分规则是什么？
+                            </button>
+                        </h2>
+                        <div id="help2" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li>单人答题正确：+10分</li>
+                                    <li>双人对战胜利：+50分</li>
+                                    <li>四人挑战冠军：+100分</li>
+                                    <li>四人挑战亚军：+50分</li>
+                                    <li>错题复习正确：+5分</li>
+                                    <li>每日登录：+20分</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#help3">
+                                如何进行双人对战？
+                            </button>
+                        </h2>
+                        <div id="help3" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>点击"双人对战"</li>
+                                    <li>选择"创建房间"或"加入房间"</li>
+                                    <li>创建房间后，将房间码分享给好友</li>
+                                    <li>好友输入房间码加入房间</li>
+                                    <li>双方准备后即可开始对战</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#help4">
+                                错题本如何使用？
+                            </button>
+                        </h2>
+                        <div id="help4" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                            <div class="accordion-body">
+                                <p>系统会自动记录您答错的题目到错题本中。您可以：</p>
+                                <ul>
+                                    <li>查看所有错题</li>
+                                    <li>按学科筛选错题</li>
+                                    <li>进行错题复习（复习正确可获得积分）</li>
+                                    <li>标记已掌握的错题</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

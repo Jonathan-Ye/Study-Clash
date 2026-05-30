@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}单人挑战 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-person-fill"></i> 单人挑战设置</h4>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle"></i> 
+                    <strong>挑战规则：</strong>答错 <span class="text-danger fw-bold">{{ single_wrong_chances }}</span> 次后游戏结束，积分 = 答对题目数量
+                </div>
+                <form id="single-challenge-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="subject_id" class="form-label">选择学科</label>
+                        <select class="form-select" id="subject_id" name="subject_id">
+                            <option value="">全部学科</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="chapter_id" class="form-label">选择章节</label>
+                        <select class="form-select" id="chapter_id" name="chapter_id">
+                            <option value="">全部章节</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="start-btn">
+                        <i class="bi bi-play-fill"></i> 开始挑战
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('subject_id').addEventListener('change', function() {
+    const subjectId = this.value;
+    const chapterSelect = document.getElementById('chapter_id');
+    
+    chapterSelect.innerHTML = '<option value="">全部章节</option>';
+    
+    if (subjectId) {
+        fetch(`/questions/api/chapters/${subjectId}`)
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(chapter => {
+                    const option = document.createElement('option');
+                    option.value = chapter.id;
+                    let displayName = chapter.name;
+                    if (chapter.has_children) {
+                        displayName = '📁 ' + displayName + ' (包含子章节)';
+                    } else if (chapter.level > 1) {
+                        displayName = '  ' + '- '.repeat(chapter.level - 1) + displayName;
+                    }
+                    option.textContent = displayName;
+                    chapterSelect.appendChild(option);
+                });
+            });
+    }
+});
+
+document.getElementById('single-challenge-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const startBtn = document.getElementById('start-btn');
+    const formData = new FormData();
+    formData.append('subject_id', document.getElementById('subject_id').value);
+    formData.append('chapter_id', document.getElementById('chapter_id').value);
+    
+    startBtn.disabled = true;
+    startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>准备题目中...';
+    
+    fetch('/game/single', {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else {
+            return response.json().then(data => {
+                throw new Error(data.error || '开始挑战失败');
+            });
+        }
+    })
+    .then(data => {
+        if (data.room_code) {
+            window.location.href = '/game/play/' + data.room_code;
+        } else {
+            throw new Error('创建游戏失败');
+        }
+    })
+    .catch(error => {
+        alert(error.message);
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-play-fill"></i> 开始挑战';
+    });
+});
+</script>
+{% endblock %}

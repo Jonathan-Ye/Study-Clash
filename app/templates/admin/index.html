@@ -1,0 +1,257 @@
+{% extends "admin/base.html" %}
+
+{% block title %}后台管理 - Study Clash{% endblock %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+<h3 class="mb-4"><i class="bi bi-speedometer2"></i> 仪表盘</h3>
+
+{# 统计卡片 #}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="card bg-primary text-white shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="card-title mb-2">用户总数</h6>
+                        <h2 class="mb-2">{{ stats.total_users }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-people"></i></div>
+                </div>
+                <small class="d-block mt-2">活跃: {{ stats.active_users }} | 今日新增: {{ stats.new_users_today }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card bg-success text-white shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="card-title mb-2">题目总数</h6>
+                        <h2 class="mb-2">{{ stats.total_questions }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-journal-text"></i></div>
+                </div>
+                <small class="d-block mt-2">已启用: {{ stats.active_questions }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card bg-warning text-white shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="card-title mb-2">游戏场次</h6>
+                        <h2 class="mb-2">{{ stats.total_games }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-controller"></i></div>
+                </div>
+                <small class="d-block mt-2">今日: {{ stats.games_today }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card bg-info text-white shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="card-title mb-2">积分发放</h6>
+                        <h2 class="mb-2">{{ stats.total_points_given }}</h2>
+                    </div>
+                    <div class="fs-1 opacity-50"><i class="bi bi-coin"></i></div>
+                </div>
+                <small class="d-block mt-2">今日: {{ stats.points_today }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# 紧急公告提醒 #}
+{% if urgent_announcements %}
+<div class="alert alert-danger mb-4">
+    <h6 class="alert-heading"><i class="bi bi-exclamation-triangle-fill"></i> 紧急公告</h6>
+    {% for a in urgent_announcements %}
+    <p class="mb-1"><strong>{{ a.title }}</strong> - {{ a.content[:80] }}{% if a.content|length > 80 %}...{% endif %}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# 趋势图表 + 分布图表 #}
+<div class="row g-4 mb-4">
+    <div class="col-md-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-graph-up"></i> 趋势分析</h6>
+                <div class="btn-group btn-group-sm" id="trendDaysGroup">
+                    <button class="btn btn-outline-primary active" data-days="7">7天</button>
+                    <button class="btn btn-outline-primary" data-days="30">30天</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="trendChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-pie-chart"></i> 题目分布</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="distributionChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# 快捷操作 + 题目分布详情 #}
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-lightning"></i> 快捷操作</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('admin.quiz_export') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-download"></i> 题库导出
+                    </a>
+                    <a href="{{ url_for('admin.quiz_import') }}" class="btn btn-outline-success">
+                        <i class="bi bi-upload"></i> 题库导入
+                    </a>
+                    <a href="{{ url_for('admin.create_announcement') }}" class="btn btn-outline-warning">
+                        <i class="bi bi-megaphone"></i> 发布公告
+                    </a>
+                    <a href="{{ url_for('admin.users') }}" class="btn btn-outline-info">
+                        <i class="bi bi-people"></i> 用户管理
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-bar-chart"></i> 难度分布</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="difficultyChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-tags"></i> 题型分布</h6>
+            </div>
+            <div class="card-body">
+                <canvas id="typeChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+// 趋势图表
+let trendChart;
+function loadTrendData(days) {
+    fetch(`/admin/api/dashboard/trends?days=${days}`)
+        .then(r => r.json())
+        .then(data => {
+            const labels = data.user_growth.map(d => d.date.slice(5));
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '新增用户',
+                            data: data.user_growth.map(d => d.count),
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13,110,253,0.1)',
+                            fill: true, tension: 0.3
+                        },
+                        {
+                            label: '游戏场次',
+                            data: data.game_active.map(d => d.count),
+                            borderColor: '#ffc107',
+                            backgroundColor: 'rgba(255,193,7,0.1)',
+                            fill: true, tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        });
+}
+
+// 趋势天数切换
+document.getElementById('trendDaysGroup').addEventListener('click', function(e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    this.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadTrendData(btn.dataset.days);
+});
+
+// 分布图表
+function loadDistributionData() {
+    fetch('/admin/api/dashboard/distribution')
+        .then(r => r.json())
+        .then(data => {
+            // 学科分布饼图
+            new Chart(document.getElementById('distributionChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: data.by_subject.map(d => d.name),
+                    datasets: [{
+                        data: data.by_subject.map(d => d.count),
+                        backgroundColor: ['#0d6efd','#198754','#ffc107','#dc3545','#6610f2','#20c997','#fd7e14','#6f42c1']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+            });
+
+            // 难度分布柱状图
+            new Chart(document.getElementById('difficultyChart'), {
+                type: 'bar',
+                data: {
+                    labels: data.by_difficulty.map(d => d.name),
+                    datasets: [{
+                        label: '题目数',
+                        data: data.by_difficulty.map(d => d.count),
+                        backgroundColor: ['#198754','#ffc107','#dc3545','#6f42c1']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+
+            // 题型分布饼图
+            new Chart(document.getElementById('typeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: data.by_type.map(d => d.name),
+                    datasets: [{
+                        data: data.by_type.map(d => d.count),
+                        backgroundColor: ['#0d6efd','#198754','#ffc107','#dc3545']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+            });
+        });
+}
+
+// 初始化加载
+loadTrendData(7);
+loadDistributionData();
+</script>
+{% endblock %}

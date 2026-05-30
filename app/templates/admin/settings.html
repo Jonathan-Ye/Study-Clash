@@ -1,0 +1,577 @@
+{% extends "admin/base.html" %}
+
+{% block title %}系统设置 - 管理后台{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid">
+    <h2 class="mb-4"><i class="bi bi-gear"></i> 系统设置</h2>
+    
+    <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="basic-tab" data-bs-toggle="tab" data-bs-target="#basic" type="button" role="tab" aria-controls="basic" aria-selected="true">
+                <i class="bi bi-sliders"></i> 基础设置
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="game-tab" data-bs-toggle="tab" data-bs-target="#game" type="button" role="tab" aria-controls="game" aria-selected="false">
+                <i class="bi bi-controller"></i> 游戏设置
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="appearance-tab" data-bs-toggle="tab" data-bs-target="#appearance" type="button" role="tab" aria-controls="appearance" aria-selected="false">
+                <i class="bi bi-palette"></i> 外观设置
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced" type="button" role="tab" aria-controls="advanced" aria-selected="false">
+                <i class="bi bi-shield-lock"></i> 安全设置
+            </button>
+        </li>
+    </ul>
+    
+    <div class="tab-content" id="settingsTabsContent">
+        <div class="tab-pane fade show active" id="basic" role="tabpanel" aria-labelledby="basic-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-clock-history"></i> 会话设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_session_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label class="form-label">用户在线时长（小时）</label>
+                                    <input type="number" class="form-control" name="session_lifetime_hours" 
+                                           value="{{ session_lifetime_hours }}" min="1" max="168">
+                                    <div class="form-text">用户登录后会话保持有效的时间，超过此时间需要重新登录（1-168小时）</div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check"></i> 保存设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0"><i class="bi bi-clock"></i> 活跃游戏超时设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_active_game_timeout_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label class="form-label">活跃游戏失效时间（分钟）</label>
+                                    <input type="number" class="form-control" name="active_game_timeout" 
+                                           value="{{ active_game_timeout }}" min="1" max="120">
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> 从游戏开始计算，超过此时间后自动结束游戏并隐藏提示。建议设置为略大于正常游戏时长（1-120分钟，默认30分钟）
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-warning text-dark">
+                                    <i class="bi bi-check"></i> 保存超时设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-door-open"></i> 房间设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_room_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label class="form-label">房间过期时间（分钟）</label>
+                                    <input type="number" class="form-control" name="room_expire_minutes" 
+                                           value="{{ room_expire_minutes }}" min="1" max="60">
+                                    <div class="form-text">等待中的房间超过此时间将自动关闭，建议设置5-30分钟</div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check"></i> 保存设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-pane fade" id="game" role="tabpanel" aria-labelledby="game-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-person-fill"></i> 单人挑战设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_single_challenge_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label class="form-label">错误机会次数</label>
+                                    <input type="number" class="form-control" name="single_wrong_chances" 
+                                           value="{{ single_wrong_chances }}" min="1" max="10">
+                                    <div class="form-text">玩家答错题目超过此次数后游戏结束</div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check"></i> 保存设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-journal-x"></i> 错题本设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_wrong_question_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label class="form-label">掌握所需连续正确次数</label>
+                                    <input type="number" class="form-control" name="wrong_consecutive_correct" 
+                                           value="{{ wrong_question_config.consecutive_correct }}" min="1" max="10">
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> 错题需要连续答对多少次才算掌握（建议2-5次，避免运气成分）
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">复习正确获得积分</label>
+                                    <input type="number" class="form-control" name="wrong_review_points" 
+                                           value="{{ wrong_question_config.review_points }}" min="0" max="100">
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> 错题复习正确并达到掌握标准时获得的积分奖励
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">每日最大复习数量</label>
+                                    <input type="number" class="form-control" name="wrong_max_review_per_day" 
+                                           value="{{ wrong_question_config.max_review_per_day }}" min="10" max="200">
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> 每天最多可复习的错题数量，防止过度疲劳
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="wrong_enable_spaced_review" 
+                                               id="wrong_enable_spaced_review" 
+                                               {% if wrong_question_config.enable_spaced_review %}checked{% endif %}>
+                                        <label class="form-check-label" for="wrong_enable_spaced_review">
+                                            启用间隔复习（艾宾浩斯遗忘曲线）
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> 开启后系统会根据遗忘曲线智能推荐复习时间，提高记忆效率
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-info text-white">
+                                    <i class="bi bi-check"></i> 保存错题本设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-12">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-star"></i> 积分设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_points_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">单人答题正确（每题）</label>
+                                        <input type="number" class="form-control" name="single_correct" 
+                                               value="{{ points_config.single_correct }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">双人对战胜利</label>
+                                        <input type="number" class="form-control" name="battle_win" 
+                                               value="{{ points_config.battle_win }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">四人挑战第一名</label>
+                                        <input type="number" class="form-control" name="four_first" 
+                                               value="{{ points_config.four_first }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">四人挑战第二名</label>
+                                        <input type="number" class="form-control" name="four_second" 
+                                               value="{{ points_config.four_second }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">四人挑战第三名</label>
+                                        <input type="number" class="form-control" name="four_third"
+                                               value="{{ points_config.four_third }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">四人挑战第四名</label>
+                                        <input type="number" class="form-control" name="four_fourth"
+                                               value="{{ points_config.four_fourth }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">错题回顾正确（每题）</label>
+                                        <input type="number" class="form-control" name="review_correct" 
+                                               value="{{ points_config.review_correct }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">每日登录</label>
+                                        <input type="number" class="form-control" name="daily_login" 
+                                               value="{{ points_config.daily_login }}" min="0">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">连续签到奖励</label>
+                                        <input type="number" class="form-control" name="streak_bonus" 
+                                               value="{{ points_config.streak_bonus }}" min="0">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check"></i> 保存积分设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-pane fade" id="appearance" role="tabpanel" aria-labelledby="appearance-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-image"></i> Logo设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">当前Logo</label>
+                                <div class="mb-3">
+                                    <img src="{{ url_for('static', filename='images/' + current_logo) }}" 
+                                         alt="当前Logo" class="img-thumbnail" style="max-height: 100px;">
+                                </div>
+                            </div>
+                            <form method="POST" action="{{ url_for('admin.update_logo') }}" enctype="multipart/form-data">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label class="form-label">上传新Logo</label>
+                                    <input type="file" class="form-control" name="logo" 
+                                           accept=".png,.jpg,.jpeg,.gif,.svg">
+                                    <div class="form-text">支持 PNG、JPG、JPEG、GIF、SVG 格式，建议尺寸 128x128 像素</div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-upload"></i> 上传Logo
+                                    </button>
+                                    <form method="POST" action="{{ url_for('admin.reset_logo') }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-outline-secondary" 
+                                                onclick="return confirm('确定要恢复默认Logo吗？')">
+                                            <i class="bi bi-arrow-counterclockwise"></i> 恢复默认
+                                        </button>
+                                    </form>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-12">
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="bi bi-globe"></i> 网站信息设置</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_site_info_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <h6 class="mb-3"><i class="bi bi-info-circle"></i> 基本信息</h6>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">网站名称</label>
+                                        <input type="text" class="form-control" name="site_name" 
+                                               value="{{ site_info.site_name }}">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">网站描述</label>
+                                        <input type="text" class="form-control" name="site_desc" 
+                                               value="{{ site_info.site_desc }}">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">联系邮箱</label>
+                                        <input type="text" class="form-control" name="contact_email" 
+                                               value="{{ site_info.contact_email }}">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">联系电话</label>
+                                        <input type="text" class="form-control" name="contact_phone" 
+                                               value="{{ site_info.contact_phone }}">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">ICP备案号</label>
+                                        <input type="text" class="form-control" name="icp" 
+                                               value="{{ site_info.icp }}" placeholder="如：京ICP备XXXXXXXX号">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">版权信息</label>
+                                        <input type="text" class="form-control" name="copyright" 
+                                               value="{{ site_info.copyright }}">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">页脚标语</label>
+                                        <input type="text" class="form-control" name="footer_slogan" 
+                                               value="{{ site_info.footer_slogan }}">
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-3">
+                                <h6 class="mb-3"><i class="bi bi-share"></i> 社交媒体链接</h6>
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label"><i class="bi bi-wechat me-1"></i> 微信</label>
+                                        <input type="text" class="form-control" name="social_wechat" 
+                                               value="{{ site_info.social_wechat }}" placeholder="微信号或链接">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label"><i class="bi bi-chat-dots me-1"></i> QQ</label>
+                                        <input type="text" class="form-control" name="social_qq" 
+                                               value="{{ site_info.social_qq }}" placeholder="QQ号或链接">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label"><i class="bi bi-sina-weibo me-1"></i> 微博</label>
+                                        <input type="text" class="form-control" name="social_weibo" 
+                                               value="{{ site_info.social_weibo }}" placeholder="微博链接">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label"><i class="bi bi-github me-1"></i> GitHub</label>
+                                        <input type="text" class="form-control" name="social_github" 
+                                               value="{{ site_info.social_github }}" placeholder="GitHub链接">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label"><i class="bi bi-envelope me-1"></i> 邮箱</label>
+                                        <input type="text" class="form-control" name="social_email" 
+                                               value="{{ site_info.social_email }}" placeholder="邮箱链接">
+                                    </div>
+                                </div>
+                                
+                                <hr class="my-3">
+                                <h6 class="mb-3"><i class="bi bi-toggle-on"></i> 显示开关</h6>
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_site_info" 
+                                                   id="show_site_info" {% if site_info.show_site_info %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_site_info">显示网站介绍区域</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_game_modes" 
+                                                   id="show_game_modes" {% if site_info.show_game_modes %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_game_modes">显示游戏模式</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_features" 
+                                                   id="show_features" {% if site_info.show_features %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_features">显示功能</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_help" 
+                                                   id="show_help" {% if site_info.show_help %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_help">显示帮助支持</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_contact" 
+                                                   id="show_contact" {% if site_info.show_contact %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_contact">显示联系方式区域</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_contact_email" 
+                                                   id="show_contact_email" {% if site_info.show_contact_email %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_contact_email">显示联系邮箱</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_contact_phone" 
+                                                   id="show_contact_phone" {% if site_info.show_contact_phone %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_contact_phone">显示联系电话</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_copyright" 
+                                                   id="show_copyright" {% if site_info.show_copyright %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_copyright">显示版权信息</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_icp" 
+                                                   id="show_icp" {% if site_info.show_icp %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_icp">显示ICP备案</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_social" 
+                                                   id="show_social" {% if site_info.show_social %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_social">显示社交媒体</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="show_slogan" 
+                                                   id="show_slogan" {% if site_info.show_slogan %}checked{% endif %}>
+                                            <label class="form-check-label" for="show_slogan">显示页脚标语</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-success mt-3">
+                                    <i class="bi bi-check"></i> 保存网站信息
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-pane fade" id="advanced" role="tabpanel" aria-labelledby="advanced-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0"><i class="bi bi-key"></i> 密码策略</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_security_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="registration_enabled"
+                                               id="registration_enabled"
+                                               {% if security_config.registration_enabled %}checked{% endif %}>
+                                        <label class="form-check-label" for="registration_enabled">
+                                            允许用户注册
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> 关闭后将隐藏注册入口，用户无法自行注册新账号
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="password_policy_enabled"
+                                               id="password_policy_enabled"
+                                               {% if security_config.password_policy_enabled %}checked{% endif %}>
+                                        <label class="form-check-label" for="password_policy_enabled">
+                                            启用密码复杂度策略
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> 开启后将强制要求用户设置符合复杂度要求的密码
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">最小密码长度</label>
+                                    <input type="number" class="form-control" name="password_min_length"
+                                           value="{{ security_config.password_min_length }}" min="8" max="32">
+                                    <div class="form-text">密码最少需要的字符数（8-32）</div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="password_require_uppercase"
+                                               id="password_require_uppercase"
+                                               {% if security_config.password_require_uppercase %}checked{% endif %}>
+                                        <label class="form-check-label" for="password_require_uppercase">
+                                            要求大写字母
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="password_require_lowercase"
+                                               id="password_require_lowercase"
+                                               {% if security_config.password_require_lowercase %}checked{% endif %}>
+                                        <label class="form-check-label" for="password_require_lowercase">
+                                            要求小写字母
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="password_require_digit"
+                                               id="password_require_digit"
+                                               {% if security_config.password_require_digit %}checked{% endif %}>
+                                        <label class="form-check-label" for="password_require_digit">
+                                            要求数字
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="password_require_special"
+                                               id="password_require_special"
+                                               {% if security_config.password_require_special %}checked{% endif %}>
+                                        <label class="form-check-label" for="password_require_special">
+                                            要求特殊字符
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="bi bi-check"></i> 保存密码策略
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0"><i class="bi bi-shield-exclamation"></i> 登录安全</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('admin.update_security_settings') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label class="form-label">最大登录尝试次数</label>
+                                    <input type="number" class="form-control" name="max_login_attempts"
+                                           value="{{ security_config.max_login_attempts }}" min="3" max="10">
+                                    <div class="form-text">连续登录失败超过此次数后锁定账户（3-10次）</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">锁定时长/分钟</label>
+                                    <input type="number" class="form-control" name="lockout_duration"
+                                           value="{{ security_config.lockout_duration }}" min="5" max="60">
+                                    <div class="form-text">账户锁定后需等待的时长（5-60分钟），管理员不受此限制</div>
+                                </div>
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="bi bi-check"></i> 保存登录安全设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="masterGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFB366;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#FF6B35;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#FF4500;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#CC3300;stop-opacity:1" />
+    </linearGradient>
+    <filter id="masterGlow2">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <circle cx="32" cy="32" r="28" fill="url(#masterGrad2)" stroke="#CC3300" stroke-width="2" filter="url(#masterGlow2)"/>
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#FFF" stroke-width="1.5" opacity="0.4"/>
+  <polygon points="32,14 34,24 44,24 36,30 39,40 32,34 25,40 28,30 20,24 30,24" fill="#FFF" opacity="0.9"/>
+  <text x="32" y="56" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#FFF" text-anchor="middle">II</text>
+</svg>

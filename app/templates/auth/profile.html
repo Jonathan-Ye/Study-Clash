@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}个人中心 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-person-circle"></i> 个人信息</h5>
+            </div>
+            <div class="card-body text-center">
+                <img src="{{ current_user.get_avatar_url() }}"
+                     class="rounded-circle mb-3" width="100" height="100" alt="avatar">
+                <h5>{{ current_user.nickname or current_user.username }}</h5>
+                <p class="text-muted">@{{ current_user.username }}</p>
+                
+                <div class="d-flex justify-content-around mt-3">
+                    <div>
+                        <h4 class="text-primary mb-0">{{ current_user.total_points }}</h4>
+                        <small class="text-muted">总积分</small>
+                    </div>
+                    <div>
+                        {% if current_user.current_tier %}
+                        <div style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                            {% if current_user.current_tier.icon %}
+                            <img src="/static/images/tiers/{{ current_user.current_tier.icon }}" 
+                                 style="width: 18px; height: 18px;">
+                            {% endif %}
+                            <span class="fw-bold" style="color: {{ current_user.current_tier.color }};">{{ current_user.current_tier.display_name }}</span>
+                        </div>
+                        {% else %}
+                        <h4 class="text-success mb-0">未定段</h4>
+                        {% endif %}
+                        <small class="text-muted">段位</small>
+                    </div>
+                    <div>
+                        <h4 class="text-warning mb-0">{{ current_user.get_rank() }}</h4>
+                        <small class="text-muted">排名</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pencil"></i> 编辑资料</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">昵称</label>
+                        <input type="text" class="form-control" name="nickname" 
+                               value="{{ current_user.nickname or '' }}" placeholder="请输入昵称">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">年级</label>
+                        <select class="form-select" name="grade">
+                            <option value="">请选择</option>
+                            <option value="高一" {% if current_user.grade == '高一' %}selected{% endif %}>高一</option>
+                            <option value="高二" {% if current_user.grade == '高二' %}selected{% endif %}>高二</option>
+                            <option value="高三" {% if current_user.grade == '高三' %}selected{% endif %}>高三</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">学校</label>
+                        <input type="text" class="form-control" name="school" 
+                               value="{{ current_user.school or '' }}" placeholder="请输入学校名称">
+                    </div>
+                    <hr>
+                    <h6>游戏与排行榜设置</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="participate_in_games" name="participate_in_games" {{ 'checked' if current_user.participate_in_games }}>
+                                <label class="form-check-label" for="participate_in_games">
+                                    <i class="bi bi-controller"></i> 参与游戏对决
+                                </label>
+                                <div class="form-text">关闭后将无法创建或加入游戏房间</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="show_in_leaderboard" name="show_in_leaderboard" {{ 'checked' if current_user.show_in_leaderboard }}>
+                                <label class="form-check-label" for="show_in_leaderboard">
+                                    <i class="bi bi-trophy"></i> 显示在排行榜
+                                </label>
+                                <div class="form-text">关闭后您的积分和排名将不会公开显示</div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6>修改密码（留空则不修改）</h6>
+                    <div class="mb-3">
+                        <label class="form-label">新密码</label>
+                        <input type="password" class="form-control" name="new_password" placeholder="请输入新密码">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">确认新密码</label>
+                        <input type="password" class="form-control" name="confirm_password" placeholder="请再次输入新密码">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> 保存修改
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

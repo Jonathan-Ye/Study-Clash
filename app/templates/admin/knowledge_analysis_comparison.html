@@ -1,0 +1,311 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}知识点对比分析{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <!-- 页面标题 -->
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-0"><i class="bi bi-bar-chart-steps"></i> 班级/专业对比分析</h4>
+                <p class="text-muted mb-0">对比不同班级或专业在相同知识点上的掌握度差异</p>
+            </div>
+            <a href="{{ url_for('admin.knowledge_analysis') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回知识点分析
+            </a>
+        </div>
+    </div>
+
+    <!-- 筛选栏 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold mb-1">对比维度</label>
+                            <ul class="nav nav-pills nav-sm" id="categoryTabs">
+                                <li class="nav-item">
+                                    <a class="nav-link active py-1" href="#" data-category="class_name">
+                                        <i class="bi bi-people-fill"></i> 按班级对比
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link py-1" href="#" data-category="major">
+                                        <i class="bi bi-bookmark-fill"></i> 按专业对比
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold mb-1">学科</label>
+                            <select class="form-select form-select-sm" id="subjectSelect">
+                                <option value="">请选择学科</option>
+                                {% for s in subjects %}
+                                <option value="{{ s.id }}">{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold mb-1">时间范围</label>
+                            <select class="form-select form-select-sm" id="timeRange">
+                                <option value="7d">近7天</option>
+                                <option value="30d" selected>近30天</option>
+                                <option value="90d">近90天</option>
+                                <option value="all">全部时间</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold mb-1">排序方式</label>
+                            <select class="form-select form-select-sm" id="sortBy">
+                                <option value="name">按章节名称</option>
+                                <option value="diff">按最大差异</option>
+                                <option value="avg">按平均掌握度</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 对比图表 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> 掌握度对比图</h5>
+                </div>
+                <div class="card-body" id="chartContainer" style="min-height: 300px;">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-funnel fs-1"></i>
+                        <p class="mt-2">请选择学科后查看对比数据</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 对比表格 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-table"></i> 对比详情表</h5>
+                </div>
+                <div class="card-body p-0" id="tableContainer">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-funnel fs-1"></i>
+                        <p class="mt-2">请选择学科后查看对比数据</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='lib/chart.js/chart.umd.min.js') }}"></script>
+
+<script>
+let currentCategory = 'class_name';
+let currentSubjectId = '';
+let currentTimeRange = '30d';
+let currentSortBy = 'name';
+let comparisonChart = null;
+
+// 分类维度切换
+document.querySelectorAll('#categoryTabs .nav-link').forEach(tab => {
+    tab.addEventListener('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('#categoryTabs .nav-link').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        currentCategory = this.dataset.category;
+        loadComparison();
+    });
+});
+
+document.getElementById('subjectSelect').addEventListener('change', function() {
+    currentSubjectId = this.value;
+    loadComparison();
+});
+document.getElementById('timeRange').addEventListener('change', function() {
+    currentTimeRange = this.value;
+    loadComparison();
+});
+document.getElementById('sortBy').addEventListener('change', function() {
+    currentSortBy = this.value;
+    loadComparison();
+});
+
+function loadComparison() {
+    if (!currentSubjectId) {
+        document.getElementById('chartContainer').innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-funnel fs-1"></i><p class="mt-2">请选择学科后查看对比数据</p></div>';
+        document.getElementById('tableContainer').innerHTML = '<div class="text-center text-muted py-5"><p>请选择学科后查看对比数据</p></div>';
+        return;
+    }
+    
+    document.getElementById('chartContainer').innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm" role="status"></div><p class="mt-2">加载中...</p></div>';
+    
+    const params = new URLSearchParams({
+        category: currentCategory,
+        subject_id: currentSubjectId,
+        time_range: currentTimeRange
+    });
+    
+    fetch(`/admin/api/knowledge-analysis/comparison?${params}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) renderComparison(res.data);
+            else document.getElementById('chartContainer').innerHTML = `<div class="text-center text-danger py-5"><p>${res.error || '加载失败'}</p></div>`;
+        });
+}
+
+function renderComparison(data) {
+    if (data.message) {
+        document.getElementById('chartContainer').innerHTML = `<div class="text-center text-muted py-5"><p>${data.message}</p></div>`;
+        document.getElementById('tableContainer').innerHTML = '';
+        return;
+    }
+    
+    if (!data.chapters || data.chapters.length === 0) {
+        document.getElementById('chartContainer').innerHTML = '<div class="text-center text-muted py-5"><p>暂无对比数据</p></div>';
+        document.getElementById('tableContainer').innerHTML = '';
+        return;
+    }
+    
+    // 排序
+    let chapters = [...data.chapters];
+    if (currentSortBy === 'diff') {
+        chapters.sort((a, b) => b.max_diff - a.max_diff);
+    } else if (currentSortBy === 'avg') {
+        chapters.sort((a, b) => (b.avg_rate || 0) - (a.avg_rate || 0));
+    }
+    
+    const categories = data.categories;
+    const colors = ['#0d6efd', '#198754', '#fd7e14', '#dc3545', '#6f42c1', '#20c997', '#ffc107', '#0dcaf0'];
+    
+    // 渲染图表
+    renderChart(chapters, categories, colors);
+    
+    // 渲染表格
+    renderTable(chapters, categories, colors);
+}
+
+function renderChart(chapters, categories, colors) {
+    const container = document.getElementById('chartContainer');
+    container.innerHTML = '<canvas id="comparisonCanvas"></canvas>';
+    
+    const ctx = document.getElementById('comparisonCanvas').getContext('2d');
+    
+    if (comparisonChart) comparisonChart.destroy();
+    
+    const labels = chapters.map(ch => ch.chapter_name.length > 10 ? ch.chapter_name.substring(0, 10) + '...' : ch.chapter_name);
+    
+    const datasets = categories.map((cat, idx) => ({
+        label: cat,
+        data: chapters.map(ch => ch.rates[cat]),
+        backgroundColor: colors[idx % colors.length] + '80',
+        borderColor: colors[idx % colors.length],
+        borderWidth: 1
+    }));
+    
+    comparisonChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + (context.parsed.y !== null ? context.parsed.y + '%' : '无数据');
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { callback: v => v + '%' },
+                    title: { display: true, text: '正确率' }
+                }
+            }
+        }
+    });
+    
+    container.style.height = Math.max(300, chapters.length * 30 + 100) + 'px';
+}
+
+function renderTable(chapters, categories, colors) {
+    const container = document.getElementById('tableContainer');
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:20%">章节名称</th>`;
+    
+    categories.forEach((cat, idx) => {
+        html += `<th style="width:${60/categories.length}%">${cat}</th>`;
+    });
+    
+    html += `
+                        <th style="width:10%">最大差异</th>
+                        <th style="width:10%">平均掌握度</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    chapters.forEach(ch => {
+        html += `<tr><td>${ch.chapter_name}</td>`;
+        
+        categories.forEach(cat => {
+            const rate = ch.rates[cat];
+            if (rate !== null && rate !== undefined) {
+                let color;
+                if (rate >= 85) color = '#198754';
+                else if (rate >= 70) color = '#0d6efd';
+                else if (rate >= 60) color = '#ffc107';
+                else if (rate >= 40) color = '#fd7e14';
+                else color = '#dc3545';
+                
+                html += `<td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="progress flex-grow-1" style="height:6px;min-width:40px">
+                            <div class="progress-bar" style="width:${rate}%;background:${color}"></div>
+                        </div>
+                        <span class="text-nowrap fw-bold" style="color:${color};font-size:0.85rem">${rate}%</span>
+                    </div>
+                </td>`;
+            } else {
+                html += '<td class="text-muted">--</td>';
+            }
+        });
+        
+        const diffClass = ch.has_significant_diff ? 'text-danger fw-bold' : 'text-muted';
+        html += `<td class="${diffClass}">${ch.max_diff}%${ch.has_significant_diff ? ' <i class="bi bi-exclamation-triangle"></i>' : ''}</td>`;
+        
+        const avgRate = ch.avg_rate;
+        if (avgRate !== null && avgRate !== undefined) {
+            let avgColor;
+            if (avgRate >= 70) avgColor = '#198754';
+            else if (avgRate >= 60) avgColor = '#ffc107';
+            else avgColor = '#dc3545';
+            html += `<td class="fw-bold" style="color:${avgColor}">${avgRate}%</td>`;
+        } else {
+            html += '<td class="text-muted">--</td>';
+        }
+        
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,3 @@
+from .openai_compatible_client import OpenAICompatibleClient
+
+BaiduQianfanClient = OpenAICompatibleClient

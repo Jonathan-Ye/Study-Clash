@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bronzeGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#CD7F32;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#B87333;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B4513;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <polygon points="32,4 40,24 61,26 46,42 49,63 32,53 15,63 18,42 3,26 24,24" fill="url(#bronzeGrad3)" stroke="#6B3E11" stroke-width="1.5"/>
+  <text x="32" y="38" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#FFF" text-anchor="middle">I</text>
+</svg>

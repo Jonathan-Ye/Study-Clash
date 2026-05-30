@@ -1,0 +1,274 @@
+{% extends "admin/base.html" %}
+
+{% block title %}确认导入用户 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <form method="POST" action="{{ url_for('admin.confirm_import') }}" id="confirm-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h4 class="mb-0"><i class="bi bi-file-earmark-check"></i> 导入数据预览</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> 
+                            <strong>数据概览：</strong> 共读取 <strong>{{ total }}</strong> 条数据
+                            <span class="ms-3">
+                                <span class="badge bg-success">可导入：{{ valid_users|length }}</span>
+                                <span class="badge bg-danger">无法导入：{{ invalid_users|length }}</span>
+                            </span>
+                        </div>
+
+                        {% set warning_count = namespace(value=0) %}
+                        {% for user in valid_users %}
+                            {% if user.warnings and user.warnings|length > 0 %}
+                                {% set warning_count.value = warning_count.value + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if warning_count.value > 0 %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>字典警告：</strong> 有 <strong>{{ warning_count.value }}</strong> 条数据的学校/年级/专业/班级字段不在字典中，请在下方表格中修改为正确的字典值或清空该字段
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if valid_users %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-success text-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-check-circle"></i> 
+                            可导入的用户（{{ valid_users|length }} 个）
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="50">行号</th>
+                                        <th>用户名</th>
+                                        <th>姓名</th>
+                                        <th>学号</th>
+                                        <th>邮箱</th>
+                                        <th>学校</th>
+                                        <th>年级</th>
+                                        <th>专业</th>
+                                        <th>班级</th>
+                                        <th>密码设置</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in valid_users %}
+                                    <tr class="table-success">
+                                        <td><span class="badge bg-secondary">{{ user.row }}</span></td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" 
+                                                   name="username_{{ user.row }}" 
+                                                   value="{{ user.username }}"
+                                                   style="width: 120px;">
+                                        </td>
+                                        <td>{{ user.real_name }}</td>
+                                        <td><code>{{ user.student_id }}</code></td>
+                                        <td>
+                                            <input type="email" class="form-control form-control-sm" 
+                                                   name="email_{{ user.row }}" 
+                                                   value="{{ user.email }}"
+                                                   style="width: 180px;">
+                                        </td>
+                                        <td>
+                                            {% set has_school_warn = user.warnings|selectattr('field','equalto','school')|list|length > 0 if user.warnings else false %}
+                                            <select class="form-select form-select-sm dict-field {% if has_school_warn %}border-warning{% endif %}" 
+                                                    name="school_{{ user.row }}" style="width: 130px;">
+                                                <option value="">（空）</option>
+                                                {% for item in dict_options.schools %}
+                                                <option value="{{ item.value }}" {% if user.school == item.value %}selected{% endif %}>{{ item.label }}</option>
+                                                {% endfor %}
+                                                {% if has_school_warn %}
+                                                <option value="{{ user.school }}" selected class="text-warning">⚠️ {{ user.school }}（不在字典中）</option>
+                                                {% endif %}
+                                            </select>
+                                            {% if has_school_warn %}
+                                            <div class="text-danger small"><i class="bi bi-exclamation-triangle"></i> 不在字典中</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set has_grade_warn = user.warnings|selectattr('field','equalto','grade')|list|length > 0 if user.warnings else false %}
+                                            <select class="form-select form-select-sm dict-field {% if has_grade_warn %}border-warning{% endif %}" 
+                                                    name="grade_{{ user.row }}" style="width: 100px;">
+                                                <option value="">（空）</option>
+                                                {% for item in dict_options.grades %}
+                                                <option value="{{ item.value }}" {% if user.grade == item.value %}selected{% endif %}>{{ item.label }}</option>
+                                                {% endfor %}
+                                                {% if has_grade_warn %}
+                                                <option value="{{ user.grade }}" selected class="text-warning">⚠️ {{ user.grade }}（不在字典中）</option>
+                                                {% endif %}
+                                            </select>
+                                            {% if has_grade_warn %}
+                                            <div class="text-danger small"><i class="bi bi-exclamation-triangle"></i> 不在字典中</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set has_major_warn = user.warnings|selectattr('field','equalto','major')|list|length > 0 if user.warnings else false %}
+                                            <select class="form-select form-select-sm dict-field {% if has_major_warn %}border-warning{% endif %}" 
+                                                    name="major_{{ user.row }}" style="width: 100px;">
+                                                <option value="">（空）</option>
+                                                {% for item in dict_options.majors %}
+                                                <option value="{{ item.value }}" {% if user.major == item.value %}selected{% endif %}>{{ item.label }}</option>
+                                                {% endfor %}
+                                                {% if has_major_warn %}
+                                                <option value="{{ user.major }}" selected class="text-warning">⚠️ {{ user.major }}（不在字典中）</option>
+                                                {% endif %}
+                                            </select>
+                                            {% if has_major_warn %}
+                                            <div class="text-danger small"><i class="bi bi-exclamation-triangle"></i> 不在字典中</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set has_class_warn = user.warnings|selectattr('field','equalto','class_name')|list|length > 0 if user.warnings else false %}
+                                            <select class="form-select form-select-sm dict-field {% if has_class_warn %}border-warning{% endif %}" 
+                                                    name="class_name_{{ user.row }}" style="width: 120px;">
+                                                <option value="">（空）</option>
+                                                {% for item in dict_options.classes %}
+                                                <option value="{{ item.value }}" {% if user.class_name == item.value %}selected{% endif %}>{{ item.label }}</option>
+                                                {% endfor %}
+                                                {% if has_class_warn %}
+                                                <option value="{{ user.class_name }}" selected class="text-warning">⚠️ {{ user.class_name }}（不在字典中）</option>
+                                                {% endif %}
+                                            </select>
+                                            {% if has_class_warn %}
+                                            <div class="text-danger small"><i class="bi bi-exclamation-triangle"></i> 不在字典中</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm" 
+                                                   name="password_{{ user.row }}" 
+                                                   value="{{ user.password }}" 
+                                                   placeholder="设置密码"
+                                                   style="width: 120px;">
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if invalid_users %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-danger text-white py-3">
+                        <h5 class="mb-0">
+                            <i class="bi bi-x-circle"></i> 
+                            无法导入的用户（{{ invalid_users|length }} 个）
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="50">行号</th>
+                                        <th>姓名</th>
+                                        <th>学号</th>
+                                        <th>错误原因</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in invalid_users %}
+                                    <tr class="table-danger">
+                                        <td><span class="badge bg-secondary">{{ user.row }}</span></td>
+                                        <td>{{ user.real_name or '-' }}</td>
+                                        <td>{{ user.student_id or '-' }}</td>
+                                        <td>
+                                            {% for error in user.errors %}
+                                            <div class="text-danger">
+                                                <i class="bi bi-exclamation-triangle"></i> {{ error }}
+                                            </div>
+                                            {% endfor %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> 返回修改
+                            </a>
+                            <div>
+                                <button type="button" class="btn btn-outline-danger me-2" onclick="cancelImport()">
+                                    <i class="bi bi-x-circle"></i> 取消导入
+                                </button>
+                                <button type="submit" name="action" value="confirm" class="btn btn-success" id="confirm-btn">
+                                    <i class="bi bi-check-circle"></i> 确认导入（{{ valid_users|length }} 个用户）
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+function cancelImport() {
+    if (confirm('确定要取消导入吗？')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = "{{ url_for('admin.confirm_import') }}";
+        
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = '{{ csrf_token() }}';
+        form.appendChild(csrfInput);
+        
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'cancel';
+        
+        form.appendChild(actionInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// 确认导入前提示
+document.getElementById('confirm-btn').addEventListener('click', function(e) {
+    const count = {{ valid_users|length }};
+    if (!confirm('确定要导入 ' + count + ' 个用户吗？\n\n导入后这些信息将被添加到系统中。')) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}

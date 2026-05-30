@@ -1,0 +1,245 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}{{ value }} - 学生列表{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <!-- 面包屑导航 -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('admin.index') }}" class="text-decoration-none">
+                    <i class="bi bi-house-door"></i> 管理后台
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('admin.student_analysis') }}" class="text-decoration-none">学生分析</a>
+            </li>
+            <li class="breadcrumb-item">
+                <span>按{{ category_label }}分类</span>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">{{ value }}</li>
+        </ol>
+    </nav>
+
+    <!-- 页面标题 -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h4><i class="bi bi-{{ 'people' if category == 'class_name' else 'bookmark' }}-fill"></i> {{ value }} - 学生列表</h4>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-success btn-sm" id="exportBtn">
+                <i class="bi bi-download"></i> 导出数据
+            </button>
+        </div>
+    </div>
+
+    <!-- 搜索和排序栏 -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="searchInput" placeholder="搜索姓名或学号...">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select form-select-sm" id="sortBy">
+                <option value="points">按积分排序</option>
+                <option value="accuracy">按正确率排序</option>
+                <option value="games">按游戏场次排序</option>
+                <option value="last_active">按最近活跃排序</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select form-select-sm" id="timeRange">
+                <option value="all">全部时间</option>
+                <option value="7d">近7天</option>
+                <option value="30d">近30天</option>
+                <option value="90d">近90天</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 学生列表表格 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:50px">#</th>
+                                    <th>姓名</th>
+                                    <th>学号</th>
+                                    <th>总积分</th>
+                                    <th>正确率</th>
+                                    <th>游戏场次</th>
+                                    <th>段位</th>
+                                    <th>最近活跃</th>
+                                    <th style="width:100px">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentTableBody">
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted py-4">
+                                        <i class="bi bi-arrow-repeat"></i> 加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分页 -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <nav id="paginationNav"></nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+(function() {
+    const category = '{{ category }}';
+    const value = '{{ value }}';
+    let currentPage = 1;
+    let currentSortBy = 'points';
+    let currentSearch = '';
+    let currentTimeRange = 'all';
+    let searchTimer = null;
+
+    const apiBase = category === 'class_name'
+        ? '/admin/api/student-analysis/class/' + encodeURIComponent(value) + '/students'
+        : '/admin/api/student-analysis/major/' + encodeURIComponent(value) + '/students';
+
+    // 搜索
+    document.getElementById('searchInput').addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        const input = this;
+        searchTimer = setTimeout(function() {
+            currentSearch = input.value.trim();
+            currentPage = 1;
+            loadStudents();
+        }, 300);
+    });
+
+    // 排序
+    document.getElementById('sortBy').addEventListener('change', function() {
+        currentSortBy = this.value;
+        currentPage = 1;
+        loadStudents();
+    });
+
+    // 时间范围
+    document.getElementById('timeRange').addEventListener('change', function() {
+        currentTimeRange = this.value;
+        currentPage = 1;
+        loadStudents();
+    });
+
+    // 导出
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        window.location.href = '{{ url_for("admin.api_export") }}?category=' + category + '&value=' + encodeURIComponent(value) + '&time_range=' + currentTimeRange;
+    });
+
+    function loadStudents() {
+        document.getElementById('studentTableBody').innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4"><i class="bi bi-arrow-repeat"></i> 加载中...</td></tr>';
+
+        const params = new URLSearchParams({
+            sort_by: currentSortBy,
+            page: currentPage,
+            per_page: 20,
+            time_range: currentTimeRange
+        });
+        if (currentSearch) params.set('search', currentSearch);
+
+        fetch(apiBase + '?' + params.toString())
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderStudents(data); })
+            .catch(function() {
+                document.getElementById('studentTableBody').innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle"></i> 数据加载失败</td></tr>';
+            });
+    }
+
+    function renderStudents(data) {
+        const students = data.students;
+        const total = data.total;
+        const page = data.page;
+        const perPage = data.per_page;
+
+        if (!students || students.length === 0) {
+            document.getElementById('studentTableBody').innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> 该分类下暂无学生数据</td></tr>';
+            document.getElementById('paginationNav').innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        const startRank = (page - 1) * perPage;
+        students.forEach(function(s, idx) {
+            const accuracyDisplay = s.accuracy !== null ? s.accuracy + '%' : '--';
+            let tierDisplay = s.tier_name;
+            if (s.tier_icon && s.tier_icon.endsWith('.svg')) {
+                tierDisplay = '<img src="/static/images/tiers/' + s.tier_icon + '" alt="' + s.tier_name + '" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;">' + s.tier_name;
+            }
+            html += '<tr>';
+            html += '<td>' + (startRank + idx + 1) + '</td>';
+            html += '<td><a href="/admin/student-analysis/student/' + s.id + '" class="text-decoration-none fw-semibold">' + s.name + '</a></td>';
+            html += '<td>' + s.student_id + '</td>';
+            html += '<td><span class="badge bg-primary">' + s.total_points + '</span></td>';
+            html += '<td>' + accuracyDisplay + '</td>';
+            html += '<td>' + s.games_played + '</td>';
+            html += '<td>' + tierDisplay + '</td>';
+            html += '<td>' + (s.last_active || '--') + '</td>';
+            html += '<td><a href="/admin/student-analysis/student/' + s.id + '" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> 详情</a></td>';
+            html += '</tr>';
+        });
+        document.getElementById('studentTableBody').innerHTML = html;
+
+        // 分页
+        const totalPages = Math.ceil(total / perPage);
+        let pagHtml = '';
+        if (totalPages > 1) {
+            pagHtml += '<ul class="pagination pagination-sm justify-content-center">';
+            pagHtml += '<li class="page-item ' + (page <= 1 ? 'disabled' : '') + '"><a class="page-link" href="#" data-page="' + (page - 1) + '">上一页</a></li>';
+
+            const maxShow = 5;
+            let startPage = Math.max(1, page - Math.floor(maxShow / 2));
+            let endPage = Math.min(totalPages, startPage + maxShow - 1);
+            if (endPage - startPage < maxShow - 1) {
+                startPage = Math.max(1, endPage - maxShow + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                pagHtml += '<li class="page-item ' + (i === page ? 'active' : '') + '"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+            }
+            pagHtml += '<li class="page-item ' + (page >= totalPages ? 'disabled' : '') + '"><a class="page-link" href="#" data-page="' + (page + 1) + '">下一页</a></li>';
+            pagHtml += '</ul>';
+        }
+        pagHtml += '<p class="text-center text-muted small">共 ' + total + ' 名学生</p>';
+        document.getElementById('paginationNav').innerHTML = pagHtml;
+
+        // 分页点击
+        document.querySelectorAll('#paginationNav .page-link').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const p = parseInt(this.dataset.page);
+                if (p >= 1 && p <= totalPages) {
+                    currentPage = p;
+                    loadStudents();
+                }
+            });
+        });
+    }
+
+    // 初始加载
+    loadStudents();
+})();
+</script>
+{% endblock %}

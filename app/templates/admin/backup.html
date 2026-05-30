@@ -1,0 +1,412 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-database"></i> 数据库备份与恢复</h5>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card border-primary">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="bi bi-cloud-arrow-up"></i> 创建数据库备份</h6>
+                        <p class="text-muted small mb-3">仅备份数据库（JSON格式，体积小，恢复快）</p>
+                        <form method="POST" action="{{ url_for('admin.create_backup_route') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="backup_type" value="database">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-database"></i> 创建数据库备份
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-success">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="bi bi-box-seam"></i> 创建完整系统备份</h6>
+                        <p class="text-muted small mb-3">备份数据库 + 所有静态文件（头像、题目图片等）</p>
+                        <form method="POST" action="{{ url_for('admin.create_backup_route') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="backup_type" value="full">
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="bi bi-box-seam"></i> 创建完整备份（ZIP）
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card border-info">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="bi bi-upload"></i> 上传备份文件</h6>
+                        <p class="text-muted small mb-3">上传之前导出的备份文件（.json 或 .zip）</p>
+                        <form method="POST" action="{{ url_for('admin.upload_backup') }}" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="mb-3">
+                                <input type="file" class="form-control" name="backup_file" accept=".json,.zip" required>
+                            </div>
+                            <button type="submit" class="btn btn-info w-100">
+                                <i class="bi bi-upload"></i> 上传
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-danger">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="bi bi-arrow-clockwise"></i> 重置系统</h6>
+                        <p class="text-muted small mb-3">⚠️ 危险操作！清空并重置为初始状态</p>
+                        <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#resetSystemModal">
+                            <i class="bi bi-arrow-clockwise"></i> 重置系统
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr>
+
+        <h6 class="mb-3"><i class="bi bi-clock-history"></i> 备份历史</h6>
+        
+        {% if backups %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>文件名</th>
+                        <th>大小</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for backup in backups %}
+                    <tr>
+                        <td>
+                            {% if backup.is_full_backup %}
+                            <i class="bi bi-file-earmark-zip text-success"></i> {{ backup.filename }}
+                            <span class="badge bg-success ms-2">完整备份</span>
+                            {% else %}
+                            <i class="bi bi-file-earmark-json text-primary"></i> {{ backup.filename }}
+                            <span class="badge bg-primary ms-2">数据库</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ backup.size_formatted }}</td>
+                        <td>{{ backup.created_at }}</td>
+                        <td>
+                            <a href="{{ url_for('admin.download_backup', filename=backup.filename) }}" 
+                               class="btn btn-sm btn-outline-info" title="下载">
+                                <i class="bi bi-download"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-warning btn-restore" 
+                                    data-filename="{{ backup.filename }}"
+                                    data-full-backup="{{ 'true' if backup.is_full_backup else 'false' }}"
+                                    title="恢复">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-delete" 
+                                    data-filename="{{ backup.filename }}"
+                                    title="删除">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size: 4rem;"></i>
+            <p class="mt-3">暂无备份文件</p>
+        </div>
+        {% endif %}
+
+        <hr>
+
+        <div class="alert alert-info">
+            <h6 class="alert-heading"><i class="bi bi-info-circle"></i> 关于备份</h6>
+            <p class="mb-2"><strong>数据库备份（.json）：</strong>仅备份数据库内容，体积小，恢复快速</p>
+            <p class="mb-2"><strong>完整系统备份（.zip）：</strong>包含数据库 + 所有静态文件（用户头像、题目图片等），适合完整迁移</p>
+            <p class="mb-0 small mt-2">当前系统备份版本: <strong>{{ current_version }}</strong></p>
+            <p class="mb-0 small">备份文件包含版本信息，系统更新时自动处理数据迁移，确保兼容性。</p>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="resetSystemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> 确认重置系统</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-danger">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    <strong>严重警告：</strong>此操作将删除所有数据并重置系统为初始状态（仅保留默认管理员账号 admin/admin123，不创建默认学科），操作不可撤销！
+                </p>
+                <p>请先<a href="#" onclick="document.querySelector('[action*=create_backup_route]').submit(); return false;">创建备份</a>！</p>
+                <div class="mb-3">
+                    <label class="form-label">请输入 <strong>RESET_SYSTEM</strong> 确认：</label>
+                    <input type="text" class="form-control" id="resetConfirmText" placeholder="RESET_SYSTEM">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmResetBtn" disabled>确认重置</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除备份文件 <strong id="deleteFilename"></strong> 吗？</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form method="POST" id="deleteForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">确认删除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="restoreProgressModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="bi bi-hourglass-split"></i> 数据恢复中...</h5>
+            </div>
+            <div class="modal-body">
+                <div id="restoreLogArea" class="bg-dark text-light p-3 rounded" 
+                     style="font-family: 'Courier New', monospace; font-size: 12px; max-height: 400px; overflow-y: auto; white-space: pre-wrap;">
+                    <div class="text-muted">等待恢复开始...</div>
+                </div>
+                <div class="mt-3">
+                    <div class="progress" style="height: 10px;">
+                        <div id="restoreProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning" 
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <p class="text-muted small mb-0"><i class="bi bi-info-circle"></i> 恢复过程可能需要几分钟，请勿关闭页面</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="restoreConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">确认恢复</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-danger">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    <strong>警告：</strong>此操作将覆盖当前所有数据，操作不可撤销！
+                </p>
+                <p>确定要从备份 <strong id="restoreFilename"></strong> 恢复数据吗？</p>
+                <div id="restoreFullBackupWarning" class="alert alert-warning" style="display: none;">
+                    <i class="bi bi-box-seam"></i> <strong>完整系统备份</strong>
+                    <p class="mb-0 small mt-1">此备份包含数据库和所有静态文件（头像、图片等），恢复时将一并还原。</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form method="POST" id="restoreForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-warning">确认恢复</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let restoreProgressInterval = null;
+let restoreLogs = [];
+
+// 确保 DOM 加载完成后再绑定事件
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('resetConfirmText').addEventListener('input', function() {
+        document.getElementById('confirmResetBtn').disabled = this.value !== 'RESET_SYSTEM';
+    });
+    
+    document.getElementById('confirmResetBtn').addEventListener('click', function() {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for('admin.reset_system') }}';
+        
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = '{{ csrf_token() }}';
+        form.appendChild(csrfInput);
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'confirm_text';
+        input.value = 'RESET_SYSTEM';
+        form.appendChild(input);
+        
+        document.body.appendChild(form);
+        form.submit();
+    });
+    
+    document.querySelectorAll('.btn-delete').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var filename = this.getAttribute('data-filename');
+            document.getElementById('deleteFilename').textContent = filename;
+            document.getElementById('deleteForm').action = '/admin/backup/delete/' + encodeURIComponent(filename);
+            var modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+            modal.show();
+        });
+    });
+    
+    document.querySelectorAll('.btn-restore').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var filename = this.getAttribute('data-filename');
+            var isFullBackup = this.getAttribute('data-full-backup') === 'true';
+            document.getElementById('restoreFilename').textContent = filename;
+            document.getElementById('restoreForm').action = '/admin/backup/restore/' + encodeURIComponent(filename);
+            
+            // 显示或隐藏完整备份警告
+            var warningDiv = document.getElementById('restoreFullBackupWarning');
+            if (isFullBackup) {
+                warningDiv.style.display = 'block';
+            } else {
+                warningDiv.style.display = 'none';
+            }
+            
+            var modal = new bootstrap.Modal(document.getElementById('restoreConfirmModal'));
+            modal.show();
+        });
+    });
+    
+    // 处理恢复按钮点击 - 使用 AJAX 提交并显示日志
+    document.getElementById('restoreForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 关闭确认模态框
+        var confirmModal = bootstrap.Modal.getInstance(document.getElementById('restoreConfirmModal'));
+        confirmModal.hide();
+        
+        // 显示进度模态框
+        var progressModal = new bootstrap.Modal(document.getElementById('restoreProgressModal'));
+        progressModal.show();
+        
+        // 获取表单数据
+        var formAction = this.action;
+        var csrfToken = this.querySelector('[name="csrf_token"]').value;
+        
+        // 重置日志
+        restoreLogs = [];
+        addRestoreLog('INFO', '开始恢复...');
+        updateRestoreProgress(0);
+        
+        // 开始轮询日志
+        restoreProgressInterval = setInterval(pollRestoreLogs, 1000);
+        
+        // 发送恢复请求（异步，立即返回 202）
+        fetch(formAction, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'csrf_token=' + encodeURIComponent(csrfToken)
+        })
+        .then(response => {
+            // 202 Accepted 表示恢复已在后台开始
+            if (response.status === 202 || response.ok) {
+                return Promise.resolve();
+            } else {
+                throw new Error('服务器响应错误: ' + response.status);
+            }
+        })
+        .catch(error => {
+            // 如果是网络错误，但恢复可能已在后台运行，继续轮询
+            console.warn('请求失败，但恢复可能已在后台运行:', error.message);
+        });
+    });
+});
+
+function addRestoreLog(level, message) {
+    var timestamp = new Date().toLocaleTimeString();
+    var logLine = '[' + timestamp + '] ' + level + ': ' + message;
+    restoreLogs.push(logLine);
+    updateRestoreLog();
+}
+
+function updateRestoreLog() {
+    var logArea = document.getElementById('restoreLogArea');
+    if (logArea) {
+        logArea.textContent = restoreLogs.join('\n');
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+}
+
+function updateRestoreProgress(percent) {
+    var progressBar = document.getElementById('restoreProgressBar');
+    if (progressBar) {
+        progressBar.style.width = percent + '%';
+    }
+}
+
+function pollRestoreLogs() {
+    fetch('/admin/backup/restore-logs')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('获取日志失败: ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.logs && data.logs.length > restoreLogs.length) {
+                // 获取新日志（只取服务器端的日志，不重复本地添加的）
+                var serverLogs = data.logs.slice(restoreLogs.filter(l => !l.includes('[')).length);
+                if (serverLogs.length > 0) {
+                    restoreLogs = restoreLogs.concat(serverLogs);
+                    updateRestoreLog();
+                }
+            }
+            
+            if (data.status === 'completed') {
+                updateRestoreProgress(100);
+                addRestoreLog('INFO', '恢复完成，正在跳转到登录页面...');
+                clearInterval(restoreProgressInterval);
+                
+                // 等待 1 秒后跳转到登录页
+                setTimeout(() => {
+                    window.location.href = '/auth/login';
+                }, 1000);
+            } else if (data.status === 'error') {
+                addRestoreLog('ERROR', data.message || '恢复失败');
+                clearInterval(restoreProgressInterval);
+            }
+        })
+        .catch(err => {
+            // 静默失败，不显示错误（可能是因为恢复过程中服务器忙）
+            console.debug('获取日志失败:', err.message);
+        });
+}
+</script>
+{% endblock %}

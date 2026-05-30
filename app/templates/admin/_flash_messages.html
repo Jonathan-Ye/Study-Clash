@@ -1,0 +1,13 @@
+{# 统一Flash消息组件 - 自动消失3秒 #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' }} alert-dismissible fade show"
+             role="alert" data-auto-dismiss="3000">
+            <i class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'check-circle-fill' if category == 'success' else 'exclamation-circle' if category == 'warning' else 'info-circle' }}"></i>
+            <span>{{ message }}</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}

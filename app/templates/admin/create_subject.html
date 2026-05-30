@@ -1,0 +1,135 @@
+{% extends "admin/base.html" %}
+
+{% block title %}添加学科 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus"></i> 添加学科</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">学科名称</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">图标</label>
+                        <input type="hidden" name="icon" id="iconInput" value="bi-book">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi bi-book fs-4 text-primary" id="iconPreview"></i>
+                            <span class="text-muted" id="iconLabel">bi-book</span>
+                        </div>
+                        <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                            <div class="d-flex flex-wrap gap-1" id="iconGrid">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">适用专业</label>
+                        <div class="row">
+                            {% for major in majors %}
+                            <div class="col-6 mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input major-checkbox" id="major_{{ major.value }}" name="applicable_majors" value="{{ major.value }}">
+                                    <label class="form-check-label" for="major_{{ major.value }}">{{ major.label }}</label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllMajors()">全选</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllMajors()">全不选</button>
+                            <span class="text-muted ms-2">（不选表示适用于所有专业）</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="is_active" name="is_active" checked>
+                            <label class="form-check-label" for="is_active">启用</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> 保存
+                    </button>
+                    <a href="{{ url_for('admin.subjects') }}" class="btn btn-outline-secondary">返回</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var subjectIcons = [
+    'bi-book', 'bi-journal-text', 'bi-journal-bookmark', 'bi-book-half',
+    'bi-calculator', 'bi-graph-up', 'bi-pie-chart', 'bi-bar-chart',
+    'bi-globe', 'bi-globe2', 'bi-map', 'bi-geo-alt',
+    'bi-lightning', 'bi-cpu', 'bi-code-slash', 'bi-terminal',
+    'bi-palette', 'bi-music-note-beamed', 'bi-camera', 'bi-film',
+    'bi-heart-pulse', 'bi-droplet', 'bi-flower1', 'bi-tree',
+    'bi-buildings', 'bi-house', 'bi-tools', 'bi-gear',
+    'bi-shield-check', 'bi-award', 'bi-trophy', 'bi-star',
+    'bi-people', 'bi-mortarboard', 'bi-backpack', 'bi-pencil',
+    'bi-chat-left-text', 'bi-translate', 'bi-fonts', 'bi-spellcheck',
+    'bi-diagram-3', 'bi-magnet', 'bi-battery-charging', 'bi-lightbulb',
+    'bi-rocket', 'bi-airplane', 'bi-bicycle', 'bi-car-front',
+    'bi-database', 'bi-server', 'bi-cloud', 'bi-phone'
+];
+
+var currentIcon = 'bi-book';
+
+function renderIconGrid() {
+    var grid = document.getElementById('iconGrid');
+    grid.innerHTML = '';
+    subjectIcons.forEach(function(icon) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-secondary p-1 icon-btn' + (icon === currentIcon ? ' active' : '');
+        btn.setAttribute('data-icon', icon);
+        btn.innerHTML = '<i class="bi ' + icon + '"></i>';
+        btn.style.width = '36px';
+        btn.style.height = '36px';
+        btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
+        btn.style.justifyContent = 'center';
+        btn.addEventListener('click', function() {
+            selectIcon(icon);
+        });
+        grid.appendChild(btn);
+    });
+}
+
+function selectIcon(icon) {
+    currentIcon = icon;
+    document.getElementById('iconInput').value = icon;
+    document.getElementById('iconPreview').className = 'bi ' + icon + ' fs-4 text-primary';
+    document.getElementById('iconLabel').textContent = icon;
+    document.querySelectorAll('.icon-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-icon') === icon);
+    });
+}
+
+renderIconGrid();
+
+function selectAllMajors() {
+    document.querySelectorAll('.major-checkbox').forEach(function(cb) {
+        cb.checked = true;
+    });
+}
+
+function deselectAllMajors() {
+    document.querySelectorAll('.major-checkbox').forEach(function(cb) {
+        cb.checked = false;
+    });
+}
+</script>
+{% endblock %}

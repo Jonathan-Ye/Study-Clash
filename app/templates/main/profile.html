@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}个人资料 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-person"></i> 个人资料</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 text-center mb-4">
+                        <div class="position-relative d-inline-block">
+                            <img src="{{ (view_user or current_user).get_avatar_url() }}" 
+                                 class="rounded-circle img-thumbnail" 
+                                 style="width: 150px; height: 150px; object-fit: cover;"
+                                 id="avatar-preview">
+                            {% if not view_user and (current_user.can_edit_profile or current_user.is_admin) %}
+                            <label for="avatar-input" class="position-absolute bottom-0 end-0 btn btn-sm btn-primary rounded-circle" style="cursor: pointer;">
+                                <i class="bi bi-camera"></i>
+                            </label>
+                            <input type="file" id="avatar-input" accept="image/*" style="display: none;">
+                            {% elif not view_user %}
+                            <div class="position-absolute bottom-0 end-0 btn btn-sm btn-secondary rounded-circle" title="管理员已禁止您修改个人资料" style="cursor: not-allowed;">
+                                <i class="bi bi-lock"></i>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <h5 class="mt-3">{{ (view_user or current_user).nickname or (view_user or current_user).username }}</h5>
+                        
+                        <!-- 段位展示区域 -->
+                        <div id="tierCardContainer" class="mb-2"></div>
+                        <link rel="stylesheet" href="{{ url_for('static', filename='css/tier.css') }}">
+                        
+                        {% set user = view_user or current_user %}
+                        {% if user.current_tier %}
+                        <div class="badge" style="background-color: {{ user.current_tier.color }}; font-size: 13px; white-space: nowrap;">
+                            {% if user.current_tier.icon %}
+                            <img src="/static/images/tiers/{{ user.current_tier.icon }}" 
+                                 alt="{{ user.current_tier.display_name }}"
+                                 style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;">
+                            {% endif %}
+                            {{ user.current_tier.display_name }}
+                        </div>
+                        {% else %}
+                        <p class="text-muted">未定段</p>
+                        {% endif %}
+                        <div class="badge bg-primary">
+                            <i class="bi bi-star"></i> {{ user.total_points }} 积分
+                        </div>
+                        <div class="badge bg-info ms-1">
+                            排名 #{{ user.get_rank() }}
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td class="text-muted" width="120">用户名</td>
+                                <td>{{ user.username }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">昵称</td>
+                                <td>{{ user.nickname or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">姓名 <span class="text-danger">*</span></td>
+                                <td>{{ user.real_name or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">学号 <span class="text-danger">*</span></td>
+                                <td>{{ user.student_id or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">手机号码</td>
+                                <td>{{ user.phone or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">邮箱</td>
+                                <td>{{ user.email }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">学校</td>
+                                <td>{{ user.school or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">年级</td>
+                                <td>{{ user.grade or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">专业</td>
+                                <td>{{ user.major or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">班级</td>
+                                <td>{{ user.class_name or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">生日</td>
+                                <td>{{ user.birthday.strftime('%Y-%m-%d') if user.birthday else '-' }}</td>
+                            </tr>
+                        </table>
+                        
+                        <div class="mt-3">
+                            {% if not view_user %}
+                            {% if current_user.can_edit_profile or current_user.is_admin %}
+                            <a href="{{ url_for('main.edit_profile') }}" class="btn btn-primary">
+                                <i class="bi bi-pencil"></i> 编辑资料
+                            </a>
+                            {% else %}
+                            <button class="btn btn-secondary" disabled title="管理员已禁止您修改个人资料">
+                                <i class="bi bi-lock"></i> 禁止修改
+                            </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-outline-secondary ms-2" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                                <i class="bi bi-key"></i> 修改密码
+                            </button>
+                            {% endif %}
+                        </div>
+                        
+                        {% if not view_user and not current_user.can_edit_profile and not current_user.is_admin %}
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-lock"></i> 管理员已禁止您修改个人资料，如需修改请联系管理员
+                        </div>
+                        {% endif %}
+                        
+                        {% if not view_user and not user.is_profile_complete() %}
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle"></i> 请完善姓名和学号信息
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 修改密码模态框 -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('auth.change_password') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-key"></i> 修改密码</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">当前密码 <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" name="old_password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新密码 <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" name="new_password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">确认新密码 <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" name="confirm_password" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> 确认修改
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/tier.js"></script>
+<script>
+const avatarInput = document.getElementById('avatar-input');
+if (avatarInput) {
+    avatarInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('avatar', file);
+            
+            fetch('/profile/avatar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('avatar-preview').src = data.avatar_url + '?t=' + Date.now();
+                    alert('头像更新成功！');
+                } else {
+                    alert(data.error || '上传失败');
+                }
+            })
+            .catch(error => {
+                alert('上传失败，请重试');
+            });
+        }
+    });
+}
+</script>
+{% endblock %}

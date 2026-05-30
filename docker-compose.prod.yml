@@ -1,0 +1,24 @@
+# ============================================
+# Study Clash Docker Compose 生产环境自适应配置
+# 根据服务器配置自动调整资源使用
+# ============================================
+
+services:
+  app:
+    environment:
+      - FLASK_ENV=production
+      - GUNICORN_MAX_WORKERS=${GUNICORN_MAX_WORKERS:-auto}
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: ${APP_MEMORY_LIMIT:-4G}
+          cpus: ${APP_CPU_LIMIT:-4.0}
+        reservations:
+          memory: ${APP_MEMORY_RESERVE:-1G}
+          cpus: ${APP_CPU_RESERVE:-0.5}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

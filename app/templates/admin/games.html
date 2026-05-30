@@ -1,0 +1,183 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}游戏记录管理{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0"><i class="bi bi-controller"></i> 游戏记录管理</h4>
+                        <div>
+                            <a href="{{ url_for('admin.statistics') }}" class="btn btn-outline-primary me-2">
+                                <i class="bi bi-bar-chart"></i> 数据统计
+                            </a>
+                            <button class="btn btn-outline-warning" onclick="cleanupExpired()">
+                                <i class="bi bi-trash"></i> 清理超时房间
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <form method="GET" class="row g-3">
+                            <div class="col-md-2">
+                                <select name="game_type" class="form-select">
+                                    <option value="">所有类型</option>
+                                    <option value="single" {{ 'selected' if request.args.get('game_type') == 'single' }}>单人挑战</option>
+                                    <option value="battle" {{ 'selected' if request.args.get('game_type') == 'battle' }}>双人对战</option>
+                                    <option value="four" {{ 'selected' if request.args.get('game_type') == 'four' }}>四人挑战</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select name="status" class="form-select">
+                                    <option value="">所有状态</option>
+                                    <option value="waiting" {{ 'selected' if request.args.get('status') == 'waiting' }}>等待中</option>
+                                    <option value="playing" {{ 'selected' if request.args.get('status') == 'playing' }}>进行中</option>
+                                    <option value="finished" {{ 'selected' if request.args.get('status') == 'finished' }}>已结束</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-search"></i> 筛选
+                                </button>
+                            </div>
+                            <div class="col-md-2">
+                                <a href="{{ url_for('admin.export_games', game_type=request.args.get('game_type', ''), status=request.args.get('status', '')) }}" class="btn btn-outline-success w-100">
+                                    <i class="bi bi-download"></i> 导出
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>类型</th>
+                                    <th>房间号</th>
+                                    <th>状态</th>
+                                    <th>玩家</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for room in pagination.items %}
+                                <tr class="{{ 'table-warning' if room.status == 'waiting' and room.is_expired() else '' }}">
+                                    <td>{{ room.id }}</td>
+                                    <td>
+                                        {% if room.game_type == 'single' %}
+                                            <span class="badge bg-info">单人挑战</span>
+                                        {% elif room.game_type == 'battle' %}
+                                            <span class="badge bg-primary">双人对战</span>
+                                        {% elif room.game_type == 'four' %}
+                                            <span class="badge bg-success">四人挑战</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ room.game_type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><code>{{ room.room_code }}</code></td>
+                                    <td>
+                                        {% if room.status == 'waiting' %}
+                                            {% if room.is_expired() %}
+                                                <span class="badge bg-danger">已超时</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">等待中</span>
+                                            {% endif %}
+                                        {% elif room.status == 'playing' %}
+                                            <span class="badge bg-primary">进行中</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">已结束</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% for player in room.players[:5] %}
+                                            <a href="{{ url_for('admin.game_user_detail', user_id=player.user_id) }}"
+                                               class="text-decoration-none"
+                                               data-bs-toggle="tooltip" 
+                                               title="{{ player.user.nickname or player.user.username }}">
+                                                <img src="{{ player.user.get_avatar_url() }}" 
+                                                     class="rounded-circle me-1" 
+                                                     style="width:24px;height:24px;object-fit:cover;">
+                                                {{ player.user.nickname or player.user.username }}
+                                            </a>
+                                            {% if not loop.last %}, {% endif %}
+                                        {% endfor %}
+                                        {% if room.players.count() > 5 %}
+                                            等{{ room.players.count() }}人
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ room.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('admin.game_room_detail', room_id=room.id) }}" 
+                                           class="btn btn-sm btn-outline-info">
+                                            <i class="bi bi-eye"></i> 详情
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">暂无游戏记录</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if pagination.pages > 1 %}
+                    <nav>
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item {{ 'disabled' if pagination.page == 1 }}">
+                                <a class="page-link" href="{{ url_for('admin.games', page=pagination.page-1) }}">上一页</a>
+                            </li>
+                            {% for page_num in pagination.iter_pages() %}
+                                {% if page_num %}
+                                <li class="page-item {{ 'active' if page_num == pagination.page }}">
+                                    <a class="page-link" href="{{ url_for('admin.games', page=page_num) }}">{{ page_num }}</a>
+                                </li>
+                                {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+                            <li class="page-item {{ 'disabled' if pagination.page == pagination.pages }}">
+                                <a class="page-link" href="{{ url_for('admin.games', page=pagination.page+1) }}">下一页</a>
+                            </li>
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function cleanupExpired() {
+    if (!confirm('确定要清理所有超时的房间吗？\n\n等待中超时的房间将被删除\n进行中超时的房间将被强制结束')) {
+        return;
+    }
+    
+    fetch('/admin/games/cleanup-expired', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('清理失败');
+        }
+    });
+}
+</script>
+{% endblock %}

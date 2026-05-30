@@ -1,0 +1,52 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}创建章节{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h4 class="mb-0"><i class="bi bi-plus-lg"></i> 创建章节</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label for="subject_id" class="form-label">所属学科 <span class="text-danger">*</span></label>
+                            <select name="subject_id" id="subject_id" class="form-select" required>
+                                <option value="">请选择学科</option>
+                                {% for subject in subjects %}
+                                    <option value="{{ subject.id }}">{{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="name" class="form-label">章节名称 <span class="text-danger">*</span></label>
+                            <input type="text" name="name" id="name" class="form-control" required>
+                        </div>
+                        <input type="hidden" name="order" id="order" value="0">
+                        <div class="mb-3">
+                            <label for="description" class="form-label">描述</label>
+                            <textarea name="description" id="description" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" name="is_active" id="is_active" class="form-check-input" checked>
+                            <label class="form-check-label" for="is_active">启用</label>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-lg"></i> 创建
+                            </button>
+                            <a href="{{ url_for('admin.chapters') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-lg"></i> 取消
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

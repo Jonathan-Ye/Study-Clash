@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+
+{% block title %}错题本 - Study Clash{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 掌握进度环 */
+.mastery-ring-container { display: flex; flex-direction: column; align-items: center; padding: 1.5rem 0; }
+.mastery-ring {
+    width: 140px; height: 140px; border-radius: 50%; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: conic-gradient(var(--success-color) calc(var(--rate) * 1%), #e5e7eb calc(var(--rate) * 1%));
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+    transition: all 0.6s ease;
+}
+.mastery-ring:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3); }
+.mastery-ring-inner {
+    width: 105px; height: 105px; border-radius: 50%; background: white;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+}
+.mastery-ring-value { font-size: 2rem; font-weight: 700; color: var(--success-color); line-height: 1; }
+.mastery-ring-label { font-size: 0.75rem; color: var(--gray-500); margin-top: 2px; }
+
+/* 打卡横幅 */
+.streak-banner {
+    background: var(--gradient-primary); border-radius: var(--radius-lg);
+    padding: 1rem 1.5rem; color: white; display: flex; align-items: center;
+    justify-content: space-between; margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-md);
+}
+.streak-days { font-size: 2rem; font-weight: 800; line-height: 1; }
+.streak-fire { font-size: 2.5rem; animation: fire-pulse 1.5s ease-in-out infinite; }
+@keyframes fire-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+.streak-checked { background: rgba(255,255,255,0.2); border-radius: var(--radius); padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+
+/* 统计卡片 */
+.stat-card {
+    background: white; border-radius: var(--radius-lg); padding: 1rem;
+    box-shadow: var(--shadow); transition: all var(--transition);
+    border-left: 4px solid transparent;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.stat-card.total { border-left-color: var(--primary-color); }
+.stat-card.not-mastered { border-left-color: var(--danger-color); }
+.stat-card.mastered { border-left-color: var(--success-color); }
+.stat-card.important { border-left-color: var(--warning-color); }
+.stat-value { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+.stat-label { font-size: 0.8rem; color: var(--gray-500); margin-top: 4px; }
+
+/* 今日任务卡片 */
+.today-task-card {
+    background: var(--gradient-primary); border-radius: var(--radius-lg);
+    padding: 1.5rem; color: white; box-shadow: var(--shadow-md);
+    transition: all var(--transition);
+}
+.today-task-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.today-task-count { font-size: 3rem; font-weight: 800; line-height: 1; }
+
+/* 快捷入口 */
+.quick-entry {
+    background: white; border-radius: var(--radius-lg); padding: 1.2rem;
+    text-align: center; box-shadow: var(--shadow); transition: all var(--transition);
+    cursor: pointer; text-decoration: none; display: block;
+}
+.quick-entry:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); color: var(--primary-color); }
+.quick-entry-icon { font-size: 2rem; margin-bottom: 0.5rem; display: block; }
+.quick-entry-label { font-size: 0.85rem; font-weight: 600; color: var(--gray-700); }
+
+/* 紧急提醒 */
+.alert-item {
+    background: white; border-radius: var(--radius); padding: 0.8rem 1rem;
+    margin-bottom: 0.5rem; border-left: 3px solid var(--danger-color);
+    box-shadow: var(--shadow-sm); transition: all var(--transition);
+}
+.alert-item:hover { background: #fef2f2; }
+
+/* 每日计划章节行 */
+.plan-chapter {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--gray-100);
+}
+.plan-chapter:last-child { border-bottom: none; }
+
+/* 可视化图表区域 */
+.chart-container { background: white; border-radius: var(--radius-lg); padding: 1.2rem; box-shadow: var(--shadow); margin-bottom: 1rem; }
+.chart-title { font-size: 0.95rem; font-weight: 600; color: var(--gray-700); margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem; }
+
+/* 学科进度条 */
+.subject-progress { margin-bottom: 0.8rem; }
+.subject-progress-label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 3px; }
+.subject-progress-bar { height: 8px; border-radius: 4px; background: var(--gray-200); overflow: hidden; }
+.subject-progress-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+
+/* 错误原因饼图(纯CSS) */
+.reason-donut {
+    width: 120px; height: 120px; border-radius: 50%; position: relative;
+    display: flex; align-items: center; justify-content: center; margin: 0 auto;
+}
+.reason-donut-center { width: 70px; height: 70px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; color: var(--gray-700); }
+.reason-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 0.8rem; }
+.reason-legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--gray-600); }
+.reason-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* 空状态 */
+.empty-state { text-align: center; padding: 3rem 1rem; }
+.empty-state-icon { font-size: 4rem; color: var(--gray-300); margin-bottom: 1rem; }
+.empty-state-text { font-size: 1.1rem; color: var(--gray-500); margin-bottom: 1.5rem; }
+
+@media (max-width: 768px) {
+    .streak-banner { flex-direction: column; text-align: center; gap: 0.5rem; }
+    .mastery-ring { width: 110px; height: 110px; }
+    .mastery-ring-inner { width: 85px; height: 85px; }
+    .mastery-ring-value { font-size: 1.5rem; }
+    .today-task-count { font-size: 2.2rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- 打卡横幅 -->
+    <div class="streak-banner">
+        <div class="d-flex align-items-center gap-3">
+            <span class="streak-fire">🔥</span>
+            <div>
+                <div class="streak-days">{{ streak_info.streak_days }}</div>
+                <div style="font-size:0.85rem;opacity:0.9;">连续复习天数</div>
+            </div>
+        </div>
+        <div class="text-end">
+            <div class="streak-checked">
+                {% if streak_info.today_checked %}
+                ✅ 今日已打卡
+                {% else %}
+                ⏳ 今日未打卡
+                {% endif %}
+            </div>
+            <div style="font-size:0.8rem;opacity:0.8;margin-top:4px;">{{ streak_info.motivation }}</div>
+        </div>
+    </div>
+
+    {% if stats.total == 0 %}
+    <!-- 空状态 -->
+    <div class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <div class="empty-state-text">暂无错题，继续加油！<br>去答题收集错题吧</div>
+        <a href="{{ url_for('game.index') }}" class="btn btn-primary btn-lg">
+            <i class="bi bi-controller"></i> 去刷题
+        </a>
+    </div>
+    {% else %}
+
+    <div class="row g-4">
+        <!-- 左侧列 -->
+        <div class="col-lg-4">
+            <!-- 掌握进度环 -->
+            <div class="chart-container">
+                <div class="chart-title"><i class="bi bi-pie-chart"></i> 总体掌握率</div>
+                <div class="mastery-ring-container">
+                    <div class="mastery-ring" style="--rate: {{ mastery_rate }}">
+                        <div class="mastery-ring-inner">
+                            <div class="mastery-ring-value">{{ mastery_rate }}%</div>
+                            <div class="mastery-ring-label">掌握率</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计概览 -->
+            <div class="chart-container">
+                <div class="chart-title"><i class="bi bi-bar-chart"></i> 错题概览</div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="stat-card total">
+                            <div class="stat-value text-primary">{{ stats.total }}</div>
+                            <div class="stat-label">总错题</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card not-mastered">
+                            <div class="stat-value text-danger">{{ stats.not_mastered }}</div>
+                            <div class="stat-label">未掌握</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card mastered">
+                            <div class="stat-value text-success">{{ stats.mastered }}</div>
+                            <div class="stat-label">已掌握</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card important">
+                            <div class="stat-value text-warning">{{ stats.important }}</div>
+                            <div class="stat-label">重点标记</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 错误原因分布(可视化) -->
+            <div class="chart-container">
+                <div class="chart-title"><i class="bi bi-diagram-3"></i> 错误原因分布</div>
+                {% if reason_stats %}
+                <div style="position:relative;height:200px;width:100%;">
+                    <canvas id="reasonDonutChart"></canvas>
+                </div>
+                <div class="d-flex flex-wrap justify-content-center gap-2 mt-2">
+                    {% set colors = ['#ef4444','#f59e0b','#3b82f6','#10b981','#8b5cf6','#6b7280'] %}
+                    {% for rs in reason_stats %}
+                    <span class="d-flex align-items-center gap-1" style="font-size:0.75rem;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:{{ colors[loop.index0 % 6] }};display:inline-block;"></span>
+                        {{ wrong_reasons.get(rs.wrong_reason, '未标注') }} ({{ rs.count }})
+                    </span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-3">暂无数据</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 右侧列 -->
+        <div class="col-lg-8">
+            <!-- 今日任务卡片 -->
+            {% if stats.review_today > 0 %}
+            <div class="today-task-card mb-4">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div style="font-size:0.9rem;opacity:0.9;margin-bottom:4px;">📅 今日待复习</div>
+                        <div class="today-task-count">{{ stats.review_today }}</div>
+                        <div style="font-size:0.85rem;opacity:0.8;">道错题等你来挑战</div>
+                    </div>
+                    <div class="col-md-6 text-md-end mt-3 mt-md-0">
+                        <a href="{{ url_for('wrong.review', mode='spaced') }}" class="btn btn-light btn-lg fw-bold">
+                            <i class="bi bi-play-circle"></i> 开始复习
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-success mb-4" role="alert">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-check-circle-fill me-2" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <strong>太棒了！</strong>暂无待复习错题，你已经完成今日复习任务 🎉
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 紧急提醒 -->
+            {% if high_freq_wrong %}
+            <div class="chart-container mb-4">
+                <div class="chart-title text-danger"><i class="bi bi-exclamation-triangle"></i> 紧急提醒 · 高频错题</div>
+                {% for wq in high_freq_wrong %}
+                <div class="alert-item">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div style="min-width:0;flex:1;">
+                            <span class="badge bg-danger me-1 mb-1">错{{ wq.wrong_count }}次</span>
+                            {% if wq.wrong_reason %}
+                            <span class="badge bg-warning text-dark me-1 mb-1">{{ wrong_reasons.get(wq.wrong_reason, '未标注') }}</span>
+                            {% endif %}
+                            <div class="mt-1" style="font-size:0.9rem;line-height:1.5;word-break:break-word;">
+                                {{ wq.question.content }}
+                            </div>
+                        </div>
+                        <a href="#" class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="event.preventDefault();showDetail({{ wq.id }})">
+                            <i class="bi bi-eye"></i> 详情
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- 快捷入口 -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <a href="{{ url_for('wrong.review', mode='spaced') }}" class="quick-entry">
+                        <span class="quick-entry-icon">🧠</span>
+                        <span class="quick-entry-label">间隔复习</span>
+                    </a>
+                </div>
+                <div class="col-6 col-md-3">
+                    <a href="{{ url_for('wrong.weak_practice') }}" class="quick-entry">
+                        <span class="quick-entry-icon">🎯</span>
+                        <span class="quick-entry-label">薄弱专练</span>
+                    </a>
+                </div>
+                <div class="col-6 col-md-3">
+                    <a href="{{ url_for('wrong.challenge') }}" class="quick-entry">
+                        <span class="quick-entry-icon">⚔️</span>
+                        <span class="quick-entry-label">闯关模式</span>
+                    </a>
+                </div>
+                <div class="col-6 col-md-3">
+                    <a href="{{ url_for('wrong.timed_challenge') }}" class="quick-entry">
+                        <span class="quick-entry-icon">⏱️</span>
+                        <span class="quick-entry-label">限时挑战</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 学科掌握进度(可视化) -->
+            {% if subject_stats %}
+            <div class="chart-container mb-4">
+                <div class="chart-title"><i class="bi bi-book"></i> 学科掌握进度</div>
+                {% for ss in subject_stats %}
+                {% set rate = (ss.mastered / ss.total * 100)|int if ss.total > 0 else 0 %}
+                <div class="subject-progress">
+                    <div class="subject-progress-label">
+                        <span class="fw-medium">{{ ss.name }}</span>
+                        <span class="text-muted">{{ ss.mastered }}/{{ ss.total }} ({{ rate }}%)</span>
+                    </div>
+                    <div class="subject-progress-bar">
+                        <div class="subject-progress-fill" style="width:{{ rate }}%;background:{% if rate <= 33 %}var(--danger-color){% elif rate <= 66 %}var(--warning-color){% else %}var(--success-color){% endif %};"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- 每日计划 + 更多入口 -->
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <div class="chart-title"><i class="bi bi-calendar-check"></i> 今日复习计划</div>
+                        {% if daily_plan.chapters %}
+                        <div class="mb-2 text-muted" style="font-size:0.85rem;">共 {{ daily_plan.total }} 题待复习</div>
+                        {% for ch in daily_plan.chapters[:5] %}
+                        <div class="plan-chapter">
+                            <div>
+                                <span class="fw-medium" style="font-size:0.85rem;">{{ ch.chapter_name }}</span>
+                                <span class="text-muted" style="font-size:0.75rem;">（{{ ch.subject_name }}）</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary">{{ ch.count }}题</span>
+                                <a href="{{ url_for('wrong.review', chapter_id=ch.chapter_id) }}" class="btn btn-sm btn-outline-primary" style="font-size:0.75rem;">复习</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-center text-muted py-2">今日无待复习题目 🎉</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <div class="chart-title"><i class="bi bi-grid"></i> 更多功能</div>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('wrong.analysis') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-graph-up"></i> 知识分析（图谱+统计）
+                            </a>
+                            <a href="{{ url_for('wrong.list_view') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-list-ul"></i> 错题列表
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 近7天复习趋势(可视化) -->
+            {% if recent_review %}
+            <div class="chart-container mt-4">
+                <div class="chart-title"><i class="bi bi-graph-up-arrow"></i> 近7天复习趋势</div>
+                <div style="position:relative;height:220px;width:100%;">
+                    <canvas id="reviewTrendChart"></canvas>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 高频错题详情弹窗 -->
+<div class="modal fade" id="wrongDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius:var(--radius-lg);border:none;">
+            <div class="modal-header" style="background:var(--gradient-primary);color:white;border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> 错题详情</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div id="detailModalContent" class="p-3 bg-light rounded" style="font-size:0.95rem;line-height:1.6;word-break:break-word;"></div>
+                </div>
+                <div id="detailModalOptions" class="mb-3"></div>
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-4">
+                        <label class="form-label fw-bold text-muted" style="font-size:0.8rem;"><i class="bi bi-check-circle"></i> 正确答案</label>
+                        <div id="detailModalAnswer" class="p-2 bg-success bg-opacity-10 rounded text-success fw-bold"></div>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label fw-bold text-muted" style="font-size:0.8rem;"><i class="bi bi-tag"></i> 错误原因</label>
+                        <div id="detailModalReason" class="p-2 bg-danger bg-opacity-10 rounded text-danger fw-bold"></div>
+                    </div>
+                    <div class="col-sm-4">
+                        <label class="form-label fw-bold text-muted" style="font-size:0.8rem;"><i class="bi bi-x-circle"></i> 累计答错</label>
+                        <div id="detailModalCount" class="p-2 bg-danger bg-opacity-10 rounded text-danger fw-bold">0 次</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-muted" style="font-size:0.8rem;"><i class="bi bi-lightbulb"></i> 解析</label>
+                    <div id="detailModalAnalysis" class="p-2 bg-info bg-opacity-10 rounded" style="font-size:0.9rem;line-height:1.5;word-break:break-word;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <a id="detailModalReviewLink" href="#" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> 去复习
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 高频错题详情弹窗
+function showDetail(id) {
+    fetch(`/wrong/${id}/detail`)
+        .then(r => { if (!r.ok) throw new Error('HTTP error'); return r.json(); })
+        .then(data => {
+            const q = data.wrong.question;
+            const modalEl = document.getElementById('wrongDetailModal');
+            // 题目内容
+            document.getElementById('detailModalContent').innerHTML = q.content || '';
+            // 选项
+            const optEl = document.getElementById('detailModalOptions');
+            if (q.options && q.options.length > 0) {
+                const correctArr = (q.correct_answer || '').split(',');
+                let optHtml = '<div class="d-flex flex-column gap-1">';
+                q.options.forEach(function(opt) {
+                    const key = opt[0], val = opt[1];
+                    const isCorrect = correctArr.includes(key);
+                    optHtml += '<div class="d-flex align-items-start gap-2 p-2 rounded ' +
+                        (isCorrect ? 'bg-success bg-opacity-10' : 'bg-light') + '">';
+                    optHtml += '<span class="fw-bold ' + (isCorrect ? 'text-success' : 'text-muted') + '">' + key + '.</span>';
+                    optHtml += '<span style="word-break:break-word;">' + val + '</span>';
+                    if (isCorrect) optHtml += ' <i class="bi bi-check-circle-fill text-success ms-auto"></i>';
+                    optHtml += '</div>';
+                });
+                optHtml += '</div>';
+                optEl.innerHTML = optHtml;
+            } else {
+                optEl.innerHTML = '';
+            }
+            document.getElementById('detailModalAnswer').textContent = q.correct_answer || '';
+            document.getElementById('detailModalAnalysis').textContent = q.analysis || '暂无解析';
+            document.getElementById('detailModalCount').textContent = (data.wrong.wrong_count || 0) + ' 次';
+            document.getElementById('detailModalReason').textContent = data.wrong.wrong_reason_display || '未标注';
+            // 去复习链接
+            document.getElementById('detailModalReviewLink').href = '/wrong/review';
+            new bootstrap.Modal(modalEl).show();
+        })
+        .catch(e => {
+            document.getElementById('detailModalContent').innerHTML = '<span class="text-danger">加载失败</span>';
+            new bootstrap.Modal(document.getElementById('wrongDetailModal')).show();
+        });
+}
+
+// 复习趋势图 + 错误原因饼图
+{% if recent_review or reason_stats %}
+document.addEventListener('DOMContentLoaded', function() {
+    {% if recent_review %}
+    const ctx = document.getElementById('reviewTrendChart');
+    if (ctx && typeof Chart !== 'undefined') {
+        const labels = [{% for r in recent_review %}'{{ r.date }}'{% if not loop.last %},{% endif %}{% endfor %}];
+        const totalData = [{% for r in recent_review %}{{ r.total }}{% if not loop.last %},{% endif %}{% endfor %}];
+        const correctData = [{% for r in recent_review %}{{ r.correct }}{% if not loop.last %},{% endif %}{% endfor %}];
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '复习题数', data: totalData,
+                    borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)',
+                    fill: true, tension: 0.4, pointRadius: 5, pointHoverRadius: 7
+                }, {
+                    label: '答对题数', data: correctData,
+                    borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
+                    fill: true, tension: 0.4, pointRadius: 5, pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+            }
+        });
+    }
+    {% endif %}
+
+    {% if reason_stats %}
+    const donutCtx = document.getElementById('reasonDonutChart');
+    if (donutCtx && typeof Chart !== 'undefined') {
+        const reasonLabels = [{% for rs in reason_stats %}'{{ wrong_reasons.get(rs.wrong_reason, "未标注") }}'{% if not loop.last %},{% endif %}{% endfor %}];
+        const reasonData = [{% for rs in reason_stats %}{{ rs.count }}{% if not loop.last %},{% endif %}{% endfor %}];
+        const reasonColors = [{% for rs in reason_stats %}'{{ ["#ef4444","#f59e0b","#3b82f6","#10b981","#8b5cf6","#6b7280"][loop.index0 % 6] }}'{% if not loop.last %},{% endif %}{% endfor %}];
+        new Chart(donutCtx, {
+            type: 'doughnut',
+            data: {
+                labels: reasonLabels,
+                datasets: [{ data: reasonData, backgroundColor: reasonColors, borderWidth: 2, borderColor: '#fff' }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                cutout: '55%',
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+    {% endif %}
+});
+{% endif %}
+</script>
+{% endblock %}

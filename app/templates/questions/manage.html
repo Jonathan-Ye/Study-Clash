@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}题目管理 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-4">
+        <h4><i class="bi bi-journal-text"></i> 题目管理</h4>
+        <div>
+            <a href="{{ url_for('questions.import_questions') }}" class="btn btn-primary">
+                <i class="bi bi-upload"></i> 导入题目
+            </a>
+            <a href="{{ url_for('questions.create') }}" class="btn btn-success">
+                <i class="bi bi-plus"></i> 添加题目
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>题目内容</th>
+                    <th>学科</th>
+                    <th>题型</th>
+                    <th>难度</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for question in pagination.items %}
+                <tr>
+                    <td>{{ question.id }}</td>
+                    <td>{{ question.content[:50] }}{% if question.content|length > 50 %}...{% endif %}</td>
+                    <td>{{ question.subject.name if question.subject else '-' }}</td>
+                    <td>
+                        <span class="badge bg-{{ 'primary' if question.question_type == 'single' else 'success' if question.question_type == 'multiple' else 'info' }}">
+                            {{ '单选' if question.question_type == 'single' else '多选' if question.question_type == 'multiple' else '判断' }}
+                        </span>
+                    </td>
+                    <td>{{ question.difficulty }}星</td>
+                    <td>
+                        <a href="{{ url_for('questions.edit', id=question.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <form action="{{ url_for('questions.delete', id=question.id) }}" method="POST" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除？')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">暂无题目</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if pagination.has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('questions.manage', page=pagination.prev_num) }}">上一页</a>
+        </li>
+        {% endif %}
+        
+        {% for page in pagination.iter_pages() %}
+            {% if page %}
+            <li class="page-item {% if page == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('questions.manage', page=page) }}">{{ page }}</a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if pagination.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{{ url_for('questions.manage', page=pagination.next_num) }}">下一页</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

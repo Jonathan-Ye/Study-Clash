@@ -1,0 +1,521 @@
+{% extends "base.html" %}
+
+{% block title %}编辑题目 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pencil"></i> 编辑题目</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="questionForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if from_admin %}
+                    <input type="hidden" name="from_admin" value="1">
+                    {% endif %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">学科</label>
+                            <select class="form-select" name="subject_id" id="subjectSelect">
+                                <option value="">请选择</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}" {% if question.subject_id == subject.id %}selected{% endif %}>{{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">题型</label>
+                            <select class="form-select" name="question_type" id="questionType" required>
+                                <option value="single" {% if question.question_type == 'single' %}selected{% endif %}>单选题</option>
+                                <option value="multiple" {% if question.question_type == 'multiple' %}selected{% endif %}>多选题</option>
+                                <option value="judge" {% if question.question_type == 'judge' %}selected{% endif %}>判断题</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">题目内容</label>
+                        <textarea class="form-control" name="content" rows="3" required>{{ question.content }}</textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">题目图片（可选）</label>
+                        <div class="image-upload-container {% if question.image_url %}has-image{% endif %}" data-field="image_url">
+                            {% if question.image_url %}
+                            <div class="image-preview-wrapper">
+                                <img src="{{ fix_image_url(question.image_url) }}" alt="预览">
+                                <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('image_url')">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <input type="hidden" name="image_url" value="{{ question.image_url }}">
+                            {% else %}
+                            <div class="upload-placeholder">
+                                <i class="bi bi-cloud-upload"></i>
+                                <small>点击或拖拽上传图片</small>
+                            </div>
+                            <input type="file" class="image-input" data-field="image_url" accept="image/*" style="display: none;">
+                            <input type="hidden" name="image_url" value="">
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div id="optionsSection" {% if question.question_type == 'judge' %}style="display: none;"{% endif %}>
+                        <h6 class="border-bottom pb-2 mb-3">选项设置</h6>
+                        
+                        <div class="option-group mb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">选项A</label>
+                                    <input type="text" class="form-control" name="option_a" value="{{ question.option_a or '' }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">选项A图片（可选）</label>
+                                    <div class="image-upload-container {% if question.option_a_image %}has-image{% endif %}" data-field="option_a_image">
+                                        {% if question.option_a_image %}
+                                        <div class="image-preview-wrapper">
+                                            <img src="{{ fix_image_url(question.option_a_image) }}" alt="预览">
+                                            <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('option_a_image')">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" name="option_a_image" value="{{ question.option_a_image }}">
+                                        {% else %}
+                                        <div class="upload-placeholder">
+                                            <i class="bi bi-cloud-upload"></i>
+                                            <small>点击或拖拽上传</small>
+                                        </div>
+                                        <input type="file" class="image-input" data-field="option_a_image" accept="image/*" style="display: none;">
+                                        <input type="hidden" name="option_a_image" value="">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="option-group mb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">选项B</label>
+                                    <input type="text" class="form-control" name="option_b" value="{{ question.option_b or '' }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">选项B图片（可选）</label>
+                                    <div class="image-upload-container {% if question.option_b_image %}has-image{% endif %}" data-field="option_b_image">
+                                        {% if question.option_b_image %}
+                                        <div class="image-preview-wrapper">
+                                            <img src="{{ fix_image_url(question.option_b_image) }}" alt="预览">
+                                            <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('option_b_image')">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" name="option_b_image" value="{{ question.option_b_image }}">
+                                        {% else %}
+                                        <div class="upload-placeholder">
+                                            <i class="bi bi-cloud-upload"></i>
+                                            <small>点击或拖拽上传</small>
+                                        </div>
+                                        <input type="file" class="image-input" data-field="option_b_image" accept="image/*" style="display: none;">
+                                        <input type="hidden" name="option_b_image" value="">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="option-group mb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">选项C</label>
+                                    <input type="text" class="form-control" name="option_c" value="{{ question.option_c or '' }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">选项C图片（可选）</label>
+                                    <div class="image-upload-container {% if question.option_c_image %}has-image{% endif %}" data-field="option_c_image">
+                                        {% if question.option_c_image %}
+                                        <div class="image-preview-wrapper">
+                                            <img src="{{ fix_image_url(question.option_c_image) }}" alt="预览">
+                                            <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('option_c_image')">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" name="option_c_image" value="{{ question.option_c_image }}">
+                                        {% else %}
+                                        <div class="upload-placeholder">
+                                            <i class="bi bi-cloud-upload"></i>
+                                            <small>点击或拖拽上传</small>
+                                        </div>
+                                        <input type="file" class="image-input" data-field="option_c_image" accept="image/*" style="display: none;">
+                                        <input type="hidden" name="option_c_image" value="">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="option-group mb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">选项D</label>
+                                    <input type="text" class="form-control" name="option_d" value="{{ question.option_d or '' }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">选项D图片（可选）</label>
+                                    <div class="image-upload-container {% if question.option_d_image %}has-image{% endif %}" data-field="option_d_image">
+                                        {% if question.option_d_image %}
+                                        <div class="image-preview-wrapper">
+                                            <img src="{{ fix_image_url(question.option_d_image) }}" alt="预览">
+                                            <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('option_d_image')">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" name="option_d_image" value="{{ question.option_d_image }}">
+                                        {% else %}
+                                        <div class="upload-placeholder">
+                                            <i class="bi bi-cloud-upload"></i>
+                                            <small>点击或拖拽上传</small>
+                                        </div>
+                                        <input type="file" class="image-input" data-field="option_d_image" accept="image/*" style="display: none;">
+                                        <input type="hidden" name="option_d_image" value="">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="option-group mb-3 extra-option" {% if not question.option_e %}style="display: none;"{% endif %}>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">选项E</label>
+                                    <input type="text" class="form-control" name="option_e" value="{{ question.option_e or '' }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">选项E图片（可选）</label>
+                                    <div class="image-upload-container {% if question.option_e_image %}has-image{% endif %}" data-field="option_e_image">
+                                        {% if question.option_e_image %}
+                                        <div class="image-preview-wrapper">
+                                            <img src="{{ fix_image_url(question.option_e_image) }}" alt="预览">
+                                            <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('option_e_image')">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" name="option_e_image" value="{{ question.option_e_image }}">
+                                        {% else %}
+                                        <div class="upload-placeholder">
+                                            <i class="bi bi-cloud-upload"></i>
+                                            <small>点击或拖拽上传</small>
+                                        </div>
+                                        <input type="file" class="image-input" data-field="option_e_image" accept="image/*" style="display: none;">
+                                        <input type="hidden" name="option_e_image" value="">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="option-group mb-3 extra-option" {% if not question.option_f %}style="display: none;"{% endif %}>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">选项F</label>
+                                    <input type="text" class="form-control" name="option_f" value="{{ question.option_f or '' }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">选项F图片（可选）</label>
+                                    <div class="image-upload-container {% if question.option_f_image %}has-image{% endif %}" data-field="option_f_image">
+                                        {% if question.option_f_image %}
+                                        <div class="image-preview-wrapper">
+                                            <img src="{{ fix_image_url(question.option_f_image) }}" alt="预览">
+                                            <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('option_f_image')">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" name="option_f_image" value="{{ question.option_f_image }}">
+                                        {% else %}
+                                        <div class="upload-placeholder">
+                                            <i class="bi bi-cloud-upload"></i>
+                                            <small>点击或拖拽上传</small>
+                                        </div>
+                                        <input type="file" class="image-input" data-field="option_f_image" accept="image/*" style="display: none;">
+                                        <input type="hidden" name="option_f_image" value="">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddOption">
+                            <i class="bi bi-plus"></i> 添加更多选项
+                        </button>
+                    </div>
+                    
+                    <div id="judgeOptions" {% if question.question_type != 'judge' %}style="display: none;"{% endif %}>
+                        <h6 class="border-bottom pb-2 mb-3">判断题选项</h6>
+                        <input type="hidden" name="option_a" value="正确">
+                        <input type="hidden" name="option_b" value="错误">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="judge_answer" id="judgeTrue" value="A" {% if question.correct_answer == 'A' %}checked{% endif %}>
+                                    <label class="form-check-label" for="judgeTrue">正确</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="judge_answer" id="judgeFalse" value="B" {% if question.correct_answer == 'B' %}checked{% endif %}>
+                                    <label class="form-check-label" for="judgeFalse">错误</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3 mt-3">
+                        <div class="col-md-4">
+                            <label class="form-label">正确答案</label>
+                            <input type="text" class="form-control" name="correct_answer" id="correctAnswer" value="{{ question.correct_answer }}" placeholder="如：A 或 A,B,C" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">难度</label>
+                            <select class="form-select" name="difficulty">
+                                <option value="1" {% if question.difficulty == 1 %}selected{% endif %}>简单</option>
+                                <option value="2" {% if question.difficulty == 2 %}selected{% endif %}>中等</option>
+                                <option value="3" {% if question.difficulty == 3 %}selected{% endif %}>困难</option>
+                                <option value="4" {% if question.difficulty == 4 %}selected{% endif %}>极难</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">分值</label>
+                            <input type="number" class="form-control" name="points" value="{{ question.points }}">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">解析</label>
+                        <textarea class="form-control" name="analysis" rows="2">{{ question.analysis or '' }}</textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> 保存
+                    </button>
+                    <a href="{{ url_for('admin.questions') if from_admin else url_for('questions.manage') }}" class="btn btn-outline-secondary">返回</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.image-upload-container {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+    text-align: center;
+    transition: all 0.3s;
+    min-height: 80px;
+    cursor: pointer;
+}
+
+.image-upload-container:hover {
+    border-color: #667eea;
+    background: #f0f4ff;
+}
+
+.image-upload-container.has-image {
+    cursor: default;
+}
+
+.image-preview-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.image-preview-wrapper img {
+    max-width: 100%;
+    max-height: 80px;
+    border-radius: 6px;
+}
+
+.image-preview-wrapper .btn-remove {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.upload-placeholder {
+    color: #6c757d;
+}
+
+.upload-placeholder i {
+    font-size: 1.5rem;
+}
+
+.upload-placeholder small {
+    display: block;
+    font-size: 0.75rem;
+    margin-top: 5px;
+}
+
+.option-group {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+</style>
+
+<script>
+let optionCount = {{ '6' if question.option_f else '5' if question.option_e else '4' }};
+
+function uploadImage(file, fieldName) {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    fetch('/questions/api/upload-image', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            updateImagePreview(fieldName, data.image_url);
+        } else {
+            alert(data.message || '上传失败');
+        }
+    });
+}
+
+function updateImagePreview(fieldName, imageUrl) {
+    const container = document.querySelector(`.image-upload-container[data-field="${fieldName}"]`);
+    if (!container) return;
+    
+    container.classList.add('has-image');
+    container.innerHTML = `
+        <div class="image-preview-wrapper">
+            <img src="${imageUrl}" alt="预览">
+            <button type="button" class="btn btn-danger btn-remove" onclick="removeImage('${fieldName}')">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+        <input type="hidden" name="${fieldName}" value="${imageUrl}">
+    `;
+}
+
+function removeImage(fieldName) {
+    const container = document.querySelector(`.image-upload-container[data-field="${fieldName}"]`);
+    if (!container) return;
+    
+    container.classList.remove('has-image');
+    container.innerHTML = `
+        <div class="upload-placeholder">
+            <i class="bi bi-cloud-upload"></i>
+            <small>点击或拖拽上传</small>
+        </div>
+        <input type="file" class="image-input" data-field="${fieldName}" accept="image/*" style="display: none;">
+        <input type="hidden" name="${fieldName}" value="">
+    `;
+    
+    initImageUpload(container);
+}
+
+function initImageUpload(container) {
+    const fieldName = container.dataset.field;
+    const fileInput = container.querySelector('.image-input');
+    
+    container.addEventListener('click', function(e) {
+        if (!container.classList.contains('has-image')) {
+            fileInput.click();
+        }
+    });
+    
+    container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        container.style.borderColor = '#667eea';
+        container.style.background = '#f0f4ff';
+    });
+    
+    container.addEventListener('dragleave', () => {
+        container.style.borderColor = '';
+        container.style.background = '';
+    });
+    
+    container.addEventListener('drop', (e) => {
+        e.preventDefault();
+        container.style.borderColor = '';
+        container.style.background = '';
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            uploadImage(file, fieldName);
+        }
+    });
+    
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files[0]) {
+                uploadImage(this.files[0], fieldName);
+            }
+        });
+    }
+}
+
+document.querySelectorAll('.image-upload-container').forEach(initImageUpload);
+
+document.getElementById('questionType').addEventListener('change', function() {
+    const optionsSection = document.getElementById('optionsSection');
+    const judgeOptions = document.getElementById('judgeOptions');
+    const correctAnswer = document.getElementById('correctAnswer');
+    
+    if (this.value === 'judge') {
+        optionsSection.style.display = 'none';
+        judgeOptions.style.display = 'block';
+        correctAnswer.readOnly = true;
+        
+        document.querySelectorAll('input[name="judge_answer"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                correctAnswer.value = this.value;
+            });
+        });
+    } else {
+        optionsSection.style.display = 'block';
+        judgeOptions.style.display = 'none';
+        correctAnswer.readOnly = false;
+    }
+});
+
+document.getElementById('btnAddOption').addEventListener('click', function() {
+    const extraOptions = document.querySelectorAll('.extra-option');
+    for (let opt of extraOptions) {
+        if (opt.style.display === 'none') {
+            opt.style.display = 'block';
+            opt.querySelectorAll('.image-upload-container').forEach(initImageUpload);
+            if (++optionCount >= 6) {
+                this.style.display = 'none';
+            }
+            break;
+        }
+    }
+});
+
+document.addEventListener('paste', (e) => {
+    const items = e.clipboardData.items;
+    for (let item of items) {
+        if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            const activeContainer = document.querySelector('.image-upload-container:hover');
+            if (activeContainer && activeContainer.dataset.field) {
+                uploadImage(file, activeContainer.dataset.field);
+            }
+            break;
+        }
+    }
+});
+</script>
+{% endblock %}

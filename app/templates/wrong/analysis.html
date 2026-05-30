@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}知识分析 - Study Clash{% endblock %}
+
+{% block extra_css %}
+<style>
+.bg-gradient-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.mastery-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+.mastery-red { background: var(--danger-color); }
+.mastery-yellow { background: var(--warning-color); }
+.mastery-green { background: var(--success-color); }
+.chapter-row { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.8rem; border-radius: var(--radius); margin-bottom: 0.3rem; transition: all 0.15s; }
+.chapter-row:hover { background: var(--gray-100); }
+.chapter-bar { width: 60px; height: 5px; border-radius: 3px; background: var(--gray-200); overflow: hidden; }
+.chapter-bar-fill { height: 100%; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4><i class="bi bi-graph-up"></i> 知识分析</h4>
+        <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> 返回仪表盘
+        </a>
+    </div>
+
+    <!-- 统计概览 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-body"><h6 class="text-muted">总错题</h6><h2 class="text-primary" id="stat-total">-</h2></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-body"><h6 class="text-muted">未掌握</h6><h2 class="text-danger" id="stat-not-mastered">-</h2></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-body"><h6 class="text-muted">已掌握</h6><h2 class="text-success" id="stat-mastered">-</h2></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-body"><h6 class="text-muted">掌握率</h6><h2 class="text-info" id="stat-rate">-</h2></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 章节掌握图谱 -->
+    {% if knowledge_map_data and knowledge_map_data.subjects %}
+    <div class="card mb-4" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+        <div class="card-header" style="background:var(--gradient-primary);color:white;border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+            <h5 class="mb-0"><i class="bi bi-diagram-2"></i> 章节掌握图谱</h5>
+        </div>
+        <div class="card-body">
+            {% if knowledge_map_data.weak_top3 %}
+            <div class="alert alert-danger py-2 mb-3">
+                <i class="bi bi-exclamation-triangle"></i> <strong>最需加强：</strong>
+                {% for wp in knowledge_map_data.weak_top3[:3] %}
+                <span class="badge bg-danger me-1">{{ wp.chapter_name }} ({{ wp.mastery_rate }}%)</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% for subject_name, chapters in knowledge_map_data.subjects.items() %}
+            <h6 class="mt-2 mb-1"><i class="bi bi-book"></i> {{ subject_name }}</h6>
+            {% for ch in chapters %}
+            <a href="{{ url_for('wrong.review', chapter_id=ch.chapter_id) }}" class="text-decoration-none text-dark">
+                <div class="chapter-row">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="mastery-dot mastery-{{ ch.color }}"></span>
+                        <span style="font-size:0.85rem;">{{ ch.chapter_name }}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="chapter-bar">
+                            <div class="chapter-bar-fill" style="width:{{ ch.mastery_rate }}%;background:{% if ch.color=='red' %}var(--danger-color){% elif ch.color=='yellow' %}var(--warning-color){% else %}var(--success-color){% endif %};"></div>
+                        </div>
+                        <span style="font-size:0.8rem;min-width:35px;text-align:right;font-weight:600;color:{% if ch.color=='red' %}var(--danger-color){% elif ch.color=='yellow' %}var(--warning-color){% else %}var(--success-color){% endif %};">{{ ch.mastery_rate }}%</span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 艾宾浩斯复习预测 -->
+    <div class="card mb-4" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+        <div class="card-header bg-gradient-primary text-white" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+            <h5 class="mb-0"><i class="bi bi-calendar-check"></i> 艾宾浩斯复习预测</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="alert alert-info mb-0">
+                        <strong><i class="bi bi-info-circle"></i> 遗忘曲线</strong>
+                        <p class="mb-0 small">系统智能安排复习时间，帮助高效巩固记忆。</p>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="row text-center">
+                        <div class="col"><h4 class="text-danger">{{ review_forecast.get(forecast_dates[0], 0) }}</h4><small class="text-muted">今日</small></div>
+                        <div class="col"><h4 class="text-warning">{{ review_forecast.get(forecast_dates[1], 0) }}</h4><small class="text-muted">明日</small></div>
+                        <div class="col"><h4 class="text-primary">{{ week_total }}</h4><small class="text-muted">本周</small></div>
+                        <div class="col"><h4 class="text-secondary">{{ no_schedule_count }}</h4><small class="text-muted">未安排</small></div>
+                    </div>
+                </div>
+            </div>
+            <div style="position:relative; height:280px;">
+                <canvas id="forecast-chart"></canvas>
+            </div>
+            <div class="d-flex justify-content-center gap-4 mt-2 small text-muted">
+                <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--danger-color);vertical-align:middle;margin-right:4px;"></span> 今日待复习</span>
+                <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--warning-color);vertical-align:middle;margin-right:4px;"></span> 明日待复习</span>
+                <span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:linear-gradient(135deg, #667eea, #764ba2);vertical-align:middle;margin-right:4px;"></span> 未来待复习</span>
+                <span><span style="display:inline-block;width:12px;height:2px;background:#ef4444;vertical-align:middle;margin-right:4px;border-top:2px dashed #ef4444;"></span> 遗忘曲线（记忆留存率）</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 学科分布 + 难度分布 -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;"><h5 class="mb-0"><i class="bi bi-book"></i> 学科分布</h5></div>
+                <div class="card-body">
+                    {% if subject_stats %}
+                    <table class="table table-hover table-sm">
+                        <thead><tr><th>学科</th><th>错题</th><th>未掌握</th><th>已掌握</th></tr></thead>
+                        <tbody>
+                            {% for stat in subject_stats %}
+                            <tr><td>{{ stat.name }}</td><td><span class="badge bg-primary">{{ stat.total }}</span></td><td><span class="badge bg-danger">{{ stat.not_mastered }}</span></td><td><span class="badge bg-success">{{ stat.mastered }}</span></td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}<p class="text-muted text-center py-3">暂无数据</p>{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;"><h5 class="mb-0"><i class="bi bi-bar-chart"></i> 难度分布</h5></div>
+                <div class="card-body">
+                    {% if difficulty_stats %}
+                    {% for stat in difficulty_stats %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>{% if stat.difficulty == 1 %}简单{% elif stat.difficulty == 2 %}中等{% elif stat.difficulty == 3 %}困难{% else %}极难{% endif %}</span>
+                        <div class="progress flex-grow-1 mx-3" style="height: 18px;">
+                            <div class="progress-bar bg-{{ 'success' if stat.difficulty == 1 else 'info' if stat.difficulty == 2 else 'warning' if stat.difficulty == 3 else 'danger' }}" style="width: {{ (stat.count / (difficulty_stats|sum(attribute='count') or 1) * 100)|round }}%"></div>
+                        </div>
+                        <span class="badge bg-secondary">{{ stat.count }}</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}<p class="text-muted text-center py-3">暂无数据</p>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 错误原因 + 薄弱知识点 -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;"><h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> 错误原因</h5></div>
+                <div class="card-body">
+                    {% if reason_stats %}
+                    {% for stat in reason_stats %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>{{ wrong_reasons.get(stat.wrong_reason, '未标注') }}</span>
+                        <div class="progress flex-grow-1 mx-3" style="height: 18px;">
+                            <div class="progress-bar bg-info" style="width: {{ (stat.count / (reason_stats|sum(attribute='count') or 1) * 100)|round }}%"></div>
+                        </div>
+                        <span class="badge bg-secondary">{{ stat.count }}</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}<p class="text-muted text-center py-3">暂无数据</p>{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;"><h5 class="mb-0"><i class="bi bi-bullseye"></i> 薄弱知识点</h5></div>
+                <div class="card-body">
+                    {% if weak_points %}
+                    <div class="list-group list-group-flush">
+                        {% for point in weak_points %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div><strong>{{ point.name }}</strong><br><small class="text-muted">{{ point.subject_name }}</small></div>
+                            <div class="text-end"><span class="badge bg-danger">{{ point.not_mastered_count }} 未掌握</span></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}<p class="text-muted text-center py-3">暂无数据</p>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 趋势图 -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;"><h5 class="mb-0"><i class="bi bi-calendar"></i> 错题趋势（近30天）</h5></div>
+                <div class="card-body">{% if recent_trend %}<canvas id="trend-chart" height="200"></canvas>{% else %}<p class="text-muted text-center py-3">暂无数据</p>{% endif %}</div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100" style="border-radius:var(--radius-lg);box-shadow:var(--shadow);border:none;">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;"><h5 class="mb-0"><i class="bi bi-check-circle"></i> 复习效果（近30天）</h5></div>
+                <div class="card-body">{% if review_trend %}<canvas id="review-chart" height="200"></canvas>{% else %}<p class="text-muted text-center py-3">暂无数据</p>{% endif %}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+fetch('/wrong/api/stats')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('stat-total').textContent = data.total;
+        document.getElementById('stat-not-mastered').textContent = data.not_mastered;
+        document.getElementById('stat-mastered').textContent = data.mastered;
+        const rate = data.total > 0 ? Math.round(data.mastered / data.total * 100) : 0;
+        document.getElementById('stat-rate').textContent = rate + '%';
+    });
+
+{% if recent_trend %}
+const trendCtx = document.getElementById('trend-chart').getContext('2d');
+new Chart(trendCtx, {
+    type: 'line',
+    data: {
+        labels: [{% for t in recent_trend %}'{{ t.date }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        datasets: [{
+            label: '新增错题',
+            data: [{% for t in recent_trend %}{{ t.count }}{% if not loop.last %}, {% endif %}{% endfor %}],
+            borderColor: 'rgb(220, 53, 69)', backgroundColor: 'rgba(220, 53, 69, 0.1)',
+            fill: true, tension: 0.3
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+});
+{% endif %}
+
+{% if review_trend %}
+const reviewCtx = document.getElementById('review-chart').getContext('2d');
+new Chart(reviewCtx, {
+    type: 'line',
+    data: {
+        labels: [{% for t in review_trend %}'{{ t.date }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+        datasets: [{
+            label: '复习题数',
+            data: [{% for t in review_trend %}{{ t.total }}{% if not loop.last %}, {% endif %}{% endfor %}],
+            borderColor: 'rgb(13, 202, 240)', backgroundColor: 'rgba(13, 202, 240, 0.1)',
+            fill: true, tension: 0.3
+        }, {
+            label: '答对题数',
+            data: [{% for t in review_trend %}{{ t.correct }}{% if not loop.last %}, {% endif %}{% endfor %}],
+            borderColor: 'rgb(25, 135, 84)', backgroundColor: 'rgba(25, 135, 84, 0.1)',
+            fill: true, tension: 0.3
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+});
+{% endif %}
+
+// ========== 艾宾浩斯遗忘曲线图 ==========
+const forecastCtx = document.getElementById('forecast-chart').getContext('2d');
+const forecastLabels = [{% for date in forecast_dates %}'{{ date[5:] }}'{% if not loop.last %}, {% endif %}{% endfor %}];
+const forecastData = [{% for date in forecast_dates %}{{ review_forecast.get(date, 0) }}{% if not loop.last %}, {% endif %}{% endfor %}];
+
+const ebbinghausCurve = forecastLabels.map((_, i) => {
+    const t = i + 1;
+    return Math.round(100 * Math.exp(-0.35 * Math.pow(t, 0.66)));
+});
+
+const barColors = forecastData.map((v, i) => {
+    if (i === 0) return 'rgba(239, 68, 68, 0.85)';
+    if (i === 1) return 'rgba(245, 158, 11, 0.85)';
+    return 'rgba(102, 126, 234, 0.6)';
+});
+const barBorders = forecastData.map((v, i) => {
+    if (i === 0) return 'rgb(239, 68, 68)';
+    if (i === 1) return 'rgb(245, 158, 11)';
+    return 'rgb(102, 126, 234)';
+});
+
+new Chart(forecastCtx, {
+    type: 'bar',
+    data: {
+        labels: forecastLabels,
+        datasets: [{
+            label: '待复习错题数',
+            data: forecastData,
+            backgroundColor: barColors,
+            borderColor: barBorders,
+            borderWidth: 1,
+            borderRadius: 4,
+            order: 2,
+            yAxisID: 'y'
+        }, {
+            label: '记忆留存率',
+            data: ebbinghausCurve,
+            type: 'line',
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            borderWidth: 2.5,
+            borderDash: [6, 3],
+            pointRadius: 3,
+            pointBackgroundColor: '#ef4444',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 1.5,
+            pointHoverRadius: 6,
+            tension: 0.45,
+            fill: true,
+            order: 1,
+            yAxisID: 'y1'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                align: 'end',
+                labels: {
+                    usePointStyle: true,
+                    padding: 20,
+                    font: { size: 11 }
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        if (ctx.datasetIndex === 0) return '待复习: ' + ctx.raw + ' 题';
+                        return '记忆留存率: ' + ctx.raw + '%';
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                type: 'linear',
+                position: 'left',
+                beginAtZero: true,
+                title: { display: true, text: '待复习题数', font: { size: 11 } },
+                ticks: { stepSize: 1, precision: 0, font: { size: 10 } },
+                grid: { color: 'rgba(0,0,0,0.05)' }
+            },
+            y1: {
+                type: 'linear',
+                position: 'right',
+                beginAtZero: true,
+                max: 100,
+                title: { display: true, text: '记忆留存率 (%)', font: { size: 11 } },
+                ticks: { callback: v => v + '%', font: { size: 10 } },
+                grid: { drawOnChartArea: false }
+            },
+            x: {
+                title: { display: true, text: '日期（月-日）', font: { size: 11 } },
+                ticks: { font: { size: 10 }, maxRotation: 45 }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

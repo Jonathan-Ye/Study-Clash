@@ -1,0 +1,206 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}用户对战记录 - {{ user.nickname or user.username }}{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="bi bi-person-lines-fill"></i> 用户对战记录</h4>
+                    <a href="{{ url_for('admin.games') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> 返回列表
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-auto me-4">
+                            <img src="{{ user.get_avatar_url() }}" 
+                                 class="rounded-circle" 
+                                 style="width:64px;height:64px;object-fit:cover;">
+                        </div>
+                        <div class="col-auto">
+                            <h4 class="mb-1">{{ user.nickname or user.username }}</h4>
+                            <small class="text-muted">@{{ user.username }}</small>
+                            {% if user.school %}
+                            <br><small><i class="bi bi-building"></i> {{ user.school }}{% if user.grade %} - {{ user.grade }}{% endif %}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col ms-4">
+                            <div class="row g-2 text-center">
+                                <div class="col">
+                                    <div class="card bg-light">
+                                        <div class="card-body py-2">
+                                            <h5 class="mb-0 text-primary">{{ stats.total_games }}</h5>
+                                            <small class="text-muted">总场次</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="card bg-light">
+                                        <div class="card-body py-2">
+                                            <h5 class="mb-0 text-success">{{ stats.total_points }}</h5>
+                                            <small class="text-muted">总积分</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="card bg-light">
+                                        <div class="card-body py-2">
+                                            <h5 class="mb-0 text-warning">{{ stats.first_place }}</h5>
+                                            <small class="text-muted">冠军次数</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="card bg-light">
+                                        <div class="card-body py-2">
+                                            <h5 class="mb-0">{{ "%.1f"|format(stats.avg_score) }}</h5>
+                                            <small class="text-muted">平均得分</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row mb-3 g-2">
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body py-2">
+                                    <span class="badge bg-info fs-6">{{ stats.single_count }}</span>
+                                    <small class="d-block text-muted mt-1">单人挑战</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body py-2">
+                                    <span class="badge bg-primary fs-6">{{ stats.battle_count }}</span>
+                                    <small class="d-block text-muted mt-1">双人对战</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body py-2">
+                                    <span class="badge bg-success fs-6">{{ stats.four_count }}</span>
+                                    <small class="d-block text-muted mt-1">四人挑战</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="card text-center">
+                                <div class="card-body py-2">
+                                    <span class="badge bg-warning fs-6">{{ (stats.first_place / stats.total_games * 100)|round(1) if stats.total_games > 0 else 0 }}%</span>
+                                    <small class="d-block text-muted mt-1">胜率</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h5><i class="bi bi-clock-history"></i> 对战记录详情</h5>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>时间</th>
+                                    <th>类型</th>
+                                    <th>学科</th>
+                                    <th>房间号</th>
+                                    <th>得分</th>
+                                    <th>正确率</th>
+                                    <th>排名</th>
+                                    <th>获得积分</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in records.items %}
+                                <tr>
+                                    <td>{{ record.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td>
+                                        {% if record.game_type == 'single' %}
+                                            <span class="badge bg-info">单人</span>
+                                        {% elif record.game_type == 'battle' %}
+                                            <span class="badge bg-primary">对战</span>
+                                        {% elif record.game_type == 'four' %}
+                                            <span class="badge bg-success">四人</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ record.subject.name if record.subject else '综合' }}</td>
+                                    <td>
+                                        {% if record.room %}
+                                        <a href="{{ url_for('admin.game_room_detail', room_id=record.room.id) }}">
+                                            <code>{{ record.room.room_code }}</code>
+                                        </a>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td><strong>{{ record.score }}</strong></td>
+                                    <td>
+                                        {% set total = record.correct_count + record.wrong_count %}
+                                        {% if total > 0 %}
+                                        {{ (record.correct_count / total * 100)|round(1) }}%
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if record.rank == 1 %}
+                                        <span class="badge bg-warning">🥇 第1名</span>
+                                        {% elif record.rank == 2 %}
+                                        <span class="badge bg-secondary">🥈 第2名</span>
+                                        {% elif record.rank == 3 %}
+                                        <span class="badge bg-warning text-dark">🥉 第3名</span>
+                                        {% else %}
+                                        第{{ record.rank }}名
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-success fw-bold">+{{ record.points_earned }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">暂无游戏记录</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if records.pages > 1 %}
+                    <nav class="mt-3">
+                        <ul class="pagination justify-content-center">
+                            {% if records.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.game_user_detail', user_id=user.id, page=records.prev_num) }}">上一页</a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for page_num in records.iter_pages() %}
+                                {% if page_num %}
+                                <li class="page-item {% if page_num == records.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('admin.game_user_detail', user_id=user.id, page=page_num) }}">{{ page_num }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if records.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.game_user_detail', user_id=user.id, page=records.next_num) }}">下一页</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

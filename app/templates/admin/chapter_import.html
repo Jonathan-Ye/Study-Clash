@@ -1,0 +1,283 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+{% if step is not defined %}
+
+{# 步骤1：上传文件 #}
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-upload"></i> 章节导入</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i> 此功能用于<strong>批量导入章节结构</strong>，支持校验预览和冲突处理。支持JSON和Excel两种格式。
+        </div>
+        <form method="post" action="{{ url_for('admin.chapter_import_validate') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">数据文件 <span class="text-danger">*</span></label>
+                    <input type="file" name="data_file" class="form-control" accept=".json,.xlsx,.xls" required>
+                    <div class="form-text">支持JSON或Excel格式，文件大小不超过{{ (max_file_size / 1024 / 1024)|round(1) }}MB</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">冲突处理策略</label>
+                    <select name="conflict_strategy" class="form-select">
+                        <option value="skip">跳过 - 保留系统已有数据</option>
+                        <option value="overwrite">覆盖 - 用导入数据覆盖已有数据</option>
+                        <option value="append">追加 - 作为新章节插入（忽略ID）</option>
+                    </select>
+                    <div class="form-text">当导入的章节与现有章节同名同位置时的处理方式</div>
+                </div>
+            </div>
+
+            <hr>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-search"></i> 校验并预览
+            </button>
+            <a href="{{ url_for('admin.chapter_import_template') }}" class="btn btn-outline-primary ms-2">
+                <i class="bi bi-download"></i> 下载导入模板
+            </a>
+            <a href="{{ url_for('admin.chapter_export') }}" class="btn btn-outline-secondary ms-2">
+                <i class="bi bi-download"></i> 前往章节导出
+            </a>
+        </form>
+    </div>
+</div>
+
+{% elif step == 'preview' %}
+
+{# 步骤2：预览确认 #}
+<div class="card shadow-sm">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-eye"></i> 导入预览</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-primary">{{ total_count }}</h3>
+                        <small class="text-muted">总章节数</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-success">{{ valid_count }}</h3>
+                        <small class="text-muted">有效章节</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-warning">{{ conflict_count }}</h3>
+                        <small class="text-muted">冲突</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-danger">{{ invalid_list|length }}</h3>
+                        <small class="text-muted">无效数据</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <p><strong>冲突处理策略：</strong>
+            {% if conflict_strategy == 'skip' %}跳过（保留系统已有数据）
+            {% elif conflict_strategy == 'overwrite' %}覆盖（用导入数据覆盖）
+            {% else %}追加（作为新章节插入）{% endif %}
+        </p>
+
+        {% if valid_list %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-list-check"></i> 有效章节明细（{{ valid_count }}条）</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                            <tr>
+                                <th style="width:40px">序号</th>
+                                <th>学科名称</th>
+                                <th>章节名称</th>
+                                <th style="width:60px">层级</th>
+                                <th>父章节名称</th>
+                                <th style="width:60px">排序</th>
+                                <th style="width:60px">启用</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in valid_list %}
+                            <tr>
+                                <td class="text-center">{{ loop.index }}</td>
+                                <td>{{ c.get('subject_name', '') or c.get('subject_id', '') }}</td>
+                                <td>{{ c.get('name', '') }}</td>
+                                <td class="text-center">{{ c.get('level', 1) }}</td>
+                                <td>{{ c.get('parent_name', '') or c.get('parent_id', '') or '-' }}</td>
+                                <td class="text-center">{{ c.get('order', 0) or '-' }}</td>
+                                <td class="text-center">
+                                    {% if c.get('is_active', True) %}
+                                    <span class="badge bg-success">是</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">否</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if invalid_list %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> 无效数据（{{ invalid_list|length }}条）
+                    {% if invalid_list|length > 20 %}
+                    <small class="text-muted">- 默认折叠，点击展开</small>
+                    {% endif %}
+                </h6>
+            </div>
+            <div class="card-body {% if invalid_list|length > 20 %}d-none{% endif %}" id="invalidDetail">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th style="width:60px">行号</th><th>章节名称</th><th>错误原因</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invalid_list %}
+                            <tr>
+                                <td>{{ item.row }}</td>
+                                <td>{{ item.data.get('name', '') }}</td>
+                                <td class="text-danger">{{ item.errors|join('；') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% if invalid_list|length > 20 %}
+            <div class="card-footer">
+                <button type="button" class="btn btn-sm btn-outline-warning" onclick="toggleInvalidDetail()">
+                    <i class="bi bi-chevron-down"></i> 展开无效数据
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <hr>
+        <form method="post" action="{{ url_for('admin.chapter_import_execute') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('确定要导入章节吗？此操作将修改数据库数据。')">
+                <i class="bi bi-upload"></i> 确认导入
+            </button>
+            <a href="{{ url_for('admin.chapter_import') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> 返回
+            </a>
+        </form>
+    </div>
+</div>
+
+{% elif step == 'result' %}
+
+{# 步骤3：导入结果 #}
+<div class="card shadow-sm">
+    <div class="card-header {% if import_result.failed > 0 %}bg-warning{% else %}bg-success{% endif %} text-white">
+        <h5 class="mb-0"><i class="bi bi-{% if import_result.failed > 0 %}exclamation-triangle{% else %}check-circle{% endif %}"></i> 导入结果</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-success">{{ import_result.success }}</h3>
+                        <small class="text-muted">成功导入</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-warning">{{ import_result.skipped }}</h3>
+                        <small class="text-muted">跳过</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-info">{{ import_result.overwritten }}</h3>
+                        <small class="text-muted">覆盖</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-light">
+                    <div class="card-body">
+                        <h3 class="text-danger">{{ import_result.failed }}</h3>
+                        <small class="text-muted">失败</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if import_result.failed_details %}
+        <h6>失败详情</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr><th>章节名称</th><th>错误原因</th></tr>
+                </thead>
+                <tbody>
+                    {% for detail in import_result.failed_details %}
+                    <tr>
+                        <td>{{ detail.get('name', '-') }}</td>
+                        <td class="text-danger">{{ detail.get('error', '') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <hr>
+        <a href="{{ url_for('admin.chapter_import') }}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> 继续导入
+        </a>
+        <a href="{{ url_for('admin.chapters') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-list-ul"></i> 查看章节列表
+        </a>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleInvalidDetail() {
+    var detailDiv = document.getElementById('invalidDetail');
+    var btn = event.target.closest('button');
+    if (detailDiv.classList.contains('d-none')) {
+        detailDiv.classList.remove('d-none');
+        btn.innerHTML = '<i class="bi bi-chevron-up"></i> 收起无效数据';
+    } else {
+        detailDiv.classList.add('d-none');
+        btn.innerHTML = '<i class="bi bi-chevron-down"></i> 展开无效数据';
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+
+{% block title %}游戏房间 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-door-open"></i> {{ '双人对战' if room.game_type == 'battle' else '四人挑战' }}
+                    <span class="float-end">房间码: <strong>{{ room.room_code }}</strong></span>
+                </h4>
+            </div>
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <p class="text-muted">分享房间码给好友，让他们加入游戏</p>
+                    <div class="input-group" style="max-width: 300px; margin: 0 auto;">
+                        <input type="text" class="form-control form-control-lg text-center" 
+                               value="{{ room.room_code }}" readonly id="room-code-input">
+                        <button class="btn btn-outline-primary" type="button" onclick="copyRoomCode()">
+                            <i class="bi bi-clipboard"></i> 复制
+                        </button>
+                    </div>
+                </div>
+                
+                <h5>玩家列表 (<span id="player-count">{{ room.current_players }}</span>/{{ room.max_players }})</h5>
+                <div class="list-group mb-4" id="players-list">
+                    {% for player in players %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center" id="player-{{ player.user_id }}">
+                        <div>
+                            <img src="{{ player.user.get_avatar_url() }}"
+                                 class="rounded-circle me-2" width="32" height="32">
+                            <span class="player-name">{{ player.user.nickname or player.user.username }}</span>
+                            {% if player.user_id == current_user.id %}
+                            <span class="badge bg-info ms-1">我</span>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-{{ 'success' if player.is_ready else 'secondary' }} ready-status" data-user-id="{{ player.user_id }}">
+                            {{ '已准备' if player.is_ready else '未准备' }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div id="waiting-message" class="alert alert-info text-center" style="display: none;">
+                    <i class="bi bi-hourglass-split"></i> 等待其他玩家加入...
+                </div>
+                
+                <div id="countdown-container" class="alert alert-success text-center" style="display: none;">
+                    <h4>所有玩家已准备！</h4>
+                    <p>游戏将在 <span id="countdown">3</span> 秒后开始...</p>
+                </div>
+                
+                <div class="d-grid gap-2" id="action-buttons">
+                    {% if room.status == 'waiting' %}
+                        <button class="btn btn-success btn-lg" id="ready-btn" onclick="toggleReady()">
+                            <i class="bi bi-check-circle"></i> 准备
+                        </button>
+                        <button class="btn btn-info btn-lg" onclick="showInviteModal()">
+                            <i class="bi bi-person-plus"></i> 邀请在线队友
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="leaveRoom()">
+                            <i class="bi bi-arrow-left"></i> 离开房间
+                        </button>
+                    {% elif room.status == 'playing' %}
+                        <a href="{{ url_for('game.play', room_code=room.room_code) }}" 
+                           class="btn btn-primary btn-lg">
+                            <i class="bi bi-play-fill"></i> 进入游戏
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let socket = null;
+let roomCode = '{{ room.room_code }}';
+let userId = {{ current_user.id }};
+let maxPlayers = {{ room.max_players }};
+{% for player in players %}
+{% if player.user_id == current_user.id %}
+let isReady = {{ 'true' if player.is_ready else 'false' }};
+{% endif %}
+{% endfor %}
+
+function initSocket() {
+    socket = io();
+    
+    socket.on('connect', function() {
+        console.log('Socket已连接, sid:', socket.id);
+        socket.emit('join_game', {
+            room_code: roomCode,
+            user_id: userId
+        });
+    });
+    
+    // 添加一个通用的错误监听器
+    socket.on('error', function(data) {
+        console.error('Socket错误:', data);
+    });
+    
+    socket.on('player_joined', function(data) {
+        updatePlayersList(data.players);
+        document.getElementById('player-count').textContent = data.current_players;
+        
+        // 从已邀请列表中移除已加入的玩家
+        if (data.user_id) {
+            _invitedPlayers.delete(data.user_id);
+            // 刷新在线列表显示
+            window._onlinePlayersCached = false;
+            if (document.getElementById('inviteModal').classList.contains('show')) {
+                loadOnlinePlayers(true);
+            }
+        }
+        
+        if (data.current_players < maxPlayers) {
+            document.getElementById('waiting-message').style.display = 'block';
+        } else {
+            document.getElementById('waiting-message').style.display = 'none';
+        }
+    });
+    
+    socket.on('player_left', function(data) {
+        const playerEl = document.getElementById('player-' + data.user_id);
+        if (playerEl) {
+            playerEl.remove();
+        }
+        document.getElementById('player-count').textContent = data.current_players;
+        document.getElementById('waiting-message').style.display = 'block';
+    });
+    
+    socket.on('player_ready_status', function(data) {
+        const statusEl = document.querySelector('.ready-status[data-user-id="' + data.user_id + '"]');
+        if (statusEl) {
+            statusEl.textContent = data.is_ready ? '已准备' : '未准备';
+            statusEl.classList.remove('bg-success', 'bg-secondary');
+            statusEl.classList.add(data.is_ready ? 'bg-success' : 'bg-secondary');
+        }
+        
+        if (data.user_id === userId) {
+            isReady = data.is_ready;
+            updateReadyButton();
+        }
+    });
+    
+    socket.on('game_started', function(data) {
+        document.getElementById('action-buttons').style.display = 'none';
+        document.getElementById('countdown-container').style.display = 'block';
+        
+        let count = 3;
+        const countdownEl = document.getElementById('countdown');
+        const interval = setInterval(() => {
+            count--;
+            countdownEl.textContent = count;
+            if (count <= 0) {
+                clearInterval(interval);
+                window.location.href = '/game/play/' + roomCode;
+            }
+        }, 1000);
+    });
+    
+    socket.on('online_players_list', function(data) {
+        console.log('收到在线玩家列表:', data.total, '人, 同班:', data.same_class_count, '人, page:', data.page);
+        const container = document.getElementById('online-players-list');
+        _isLoadingPlayers = false;
+        window._inviteHasMore = data.has_more;
+        
+        // 更新总数提示
+        let headerHtml = '';
+        if (data.total > 0) {
+            const sameClassText = data.same_class_count > 0 ? `（同班级 <strong>${data.same_class_count}</strong> 人）` : '';
+            headerHtml = `<div class="alert alert-info py-2 mb-3 small">
+                <i class="bi bi-info-circle"></i> 
+                共 <strong>${data.total}</strong> 人在线${sameClassText}
+            </div>`;
+        }
+        
+        if (data.page === 1) {
+            container.innerHTML = headerHtml;
+        } else {
+            // 追加到现有列表
+            const loadMoreBtn = container.querySelector('.load-more-container');
+            if (loadMoreBtn) loadMoreBtn.remove();
+        }
+        
+        if (!data.players || data.players.length === 0) {
+            if (data.page === 1) {
+                container.innerHTML += '<div class="text-center text-muted py-3">暂无在线队友</div>';
+            }
+            return;
+        }
+        
+        const groups = {};
+        data.players.forEach(player => {
+            if (!groups[player.class_name]) {
+                groups[player.class_name] = [];
+            }
+            groups[player.class_name].push(player);
+        });
+        
+        Object.keys(groups).sort().forEach(className => {
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'mb-3';
+            
+            const header = document.createElement('h6');
+            header.className = 'text-primary border-bottom pb-2';
+            header.innerHTML = `<i class="bi bi-people"></i> ${className} (${groups[className].length}人)`;
+            groupDiv.appendChild(header);
+            
+            const listDiv = document.createElement('div');
+            listDiv.className = 'list-group list-group-flush';
+            
+            groups[className].forEach(player => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                
+                // 判断玩家状态
+                const isInvited = _invitedPlayers.has(player.id);
+                const itemHtml = `
+                    <div>
+                        <img src="${player.avatar_url || '/static/avatars/default.png'}" 
+                             class="rounded-circle me-2" width="32" height="32">
+                        <span class="player-name">${player.nickname || player.username}</span>
+                        ${player.is_same_class ? '<span class="badge bg-success ms-1">同班</span>' : ''}
+                        ${isInvited ? '<span class="badge bg-warning ms-1">已邀请</span>' : ''}
+                    </div>
+                `;
+                
+                if (isInvited) {
+                    item.innerHTML = itemHtml;
+                } else {
+                    item.innerHTML = itemHtml + `
+                        <button class="btn btn-sm btn-primary" onclick="invitePlayer(${player.id}, '${player.nickname || player.username}')">
+                            <i class="bi bi-person-plus"></i> 邀请
+                        </button>
+                    `;
+                }
+                
+                listDiv.appendChild(item);
+            });
+            
+            groupDiv.appendChild(listDiv);
+            container.appendChild(groupDiv);
+        });
+        
+        // 添加"加载更多"按钮
+        if (data.has_more) {
+            const loadMoreDiv = document.createElement('div');
+            loadMoreDiv.className = 'text-center py-3 load-more-container';
+            loadMoreDiv.innerHTML = `
+                <button class="btn btn-sm btn-outline-primary" onclick="loadMorePlayers()">
+                    <i class="bi bi-arrow-down-circle"></i> 加载更多
+                </button>
+            `;
+            container.appendChild(loadMoreDiv);
+        }
+    });
+    
+    socket.on('invitation_sent', function(data) {
+        const toast = document.createElement('div');
+        toast.className = 'position-fixed bottom-0 end-0 p-3';
+        toast.style.zIndex = '9999';
+        toast.innerHTML = `
+            <div class="toast show" role="alert">
+                <div class="toast-header bg-success text-white">
+                    <strong class="me-auto"><i class="bi bi-check-circle"></i> 邀请已发送</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    已向 ${data.target_user_name} 发送邀请
+                </div>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    });
+    
+    socket.on('invitation_declined', function(data) {
+        const toast = document.createElement('div');
+        toast.className = 'position-fixed bottom-0 end-0 p-3';
+        toast.style.zIndex = '9999';
+        toast.innerHTML = `
+            <div class="toast show" role="alert">
+                <div class="toast-header bg-warning text-dark">
+                    <strong class="me-auto"><i class="bi bi-x-circle"></i> 邀请被拒绝</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${data.target_user_name} 拒绝了邀请
+                </div>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    });
+    
+    socket.on('game_invitation', function(data) {
+        console.log('收到游戏邀请:', data);
+        const gameTypeText = data.game_type === 'battle' ? '双人对战' : '四人挑战';
+        
+        const modal = new bootstrap.Modal(document.getElementById('gameInviteModal'));
+        document.getElementById('invite-info').innerHTML = `
+            <div class="text-center mb-3">
+                <img src="${data.inviter_avatar || '/static/avatars/default.png'}" 
+                     class="rounded-circle" width="64" height="64">
+                <h5 class="mt-2">${data.inviter_name}</h5>
+                <p class="text-muted">邀请你加入${gameTypeText}房间</p>
+            </div>
+            <div class="mb-3">
+                <p><strong>房间码：</strong><code class="fs-4">${data.room_code}</code></p>
+                <p><strong>学科：</strong>${data.subject_name}</p>
+                <p><strong>人数：</strong>${data.current_players}/${data.max_players}</p>
+            </div>
+        `;
+        
+        document.getElementById('accept-invite-btn').onclick = function() {
+            socket.emit('accept_invitation', {
+                room_code: data.room_code
+            });
+            modal.hide();
+        };
+        
+        document.getElementById('decline-invite-btn').onclick = function() {
+            socket.emit('decline_invitation', {
+                inviter_id: data.inviter_id,
+                room_code: data.room_code
+            });
+            modal.hide();
+        };
+        
+        modal.show();
+    });
+    
+    socket.on('invitation_accepted', function(data) {
+        window.location.href = data.redirect_url;
+    });
+    
+    socket.on('user_online_status', function(data) {
+        // 只有在邀请模态框打开时才静默更新，不显示加载动画
+        const inviteModal = document.getElementById('inviteModal');
+        if (inviteModal && inviteModal.classList.contains('show')) {
+            console.log('用户状态变化，静默更新在线列表');
+            loadOnlinePlayers(true); // 静默更新
+        }
+    });
+}
+
+function updateReadyButton() {
+    const btn = document.getElementById('ready-btn');
+    if (isReady) {
+        btn.innerHTML = '<i class="bi bi-x-circle"></i> 取消准备';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-warning');
+    } else {
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> 准备';
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-success');
+    }
+}
+
+function updatePlayersList(players) {
+    const container = document.getElementById('players-list');
+    container.innerHTML = '';
+
+    players.forEach(player => {
+        const div = document.createElement('div');
+        div.className = 'list-group-item d-flex justify-content-between align-items-center';
+        div.id = 'player-' + player.user_id;
+        div.innerHTML = `
+            <div>
+                <img src="${player.avatar_url || '/static/avatars/default.png'}" class="rounded-circle me-2" width="32" height="32">
+                <span class="player-name">${player.nickname || player.username}</span>
+                ${player.user_id === userId ? '<span class="badge bg-info ms-1">我</span>' : ''}
+            </div>
+            <span class="badge bg-${player.is_ready ? 'success' : 'secondary'} ready-status" data-user-id="${player.user_id}">
+                ${player.is_ready ? '已准备' : '未准备'}
+            </span>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function copyRoomCode() {
+    navigator.clipboard.writeText(roomCode);
+    alert('房间码已复制！');
+}
+
+function toggleReady() {
+    socket.emit('player_ready', {
+        room_code: roomCode,
+        user_id: userId
+    });
+}
+
+function leaveRoom() {
+    socket.emit('leave_game', {
+        room_code: roomCode,
+        user_id: userId
+    });
+    localStorage.removeItem('pending_game');
+    window.location.href = '/game/';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initSocket();
+    updateReadyButton();
+    
+    // 清除未完成的游戏标记
+    localStorage.removeItem('pending_game');
+    
+    {% if room.current_players < room.max_players %}
+    document.getElementById('waiting-message').style.display = 'block';
+    {% endif %}
+});
+
+function showInviteModal() {
+    const modal = new bootstrap.Modal(document.getElementById('inviteModal'));
+    modal.show();
+    
+    // 重置分页和列表
+    window._invitePage = 1;
+    window._inviteHasMore = true;
+    window._invitedPlayers = new Set();
+    
+    loadOnlinePlayers(false);
+    
+    // 添加滚动监听
+    const modalBody = document.getElementById('invite-modal-body');
+    if (modalBody) {
+        modalBody.onscroll = function() {
+            // 当滚动到底部时自动加载
+            if (this.scrollHeight - this.scrollTop - this.clientHeight < 100) {
+                if (window._inviteHasMore && !_isLoadingPlayers) {
+                    loadMorePlayers();
+                }
+            }
+        };
+    }
+}
+
+let _isLoadingPlayers = false;
+let _isSilentUpdate = false;
+let _invitedPlayers = new Set(); // 记录已邀请的玩家
+
+function loadOnlinePlayers(silent = false) {
+    if (_isLoadingPlayers || !window._inviteHasMore) return;
+    _isLoadingPlayers = true;
+    _isSilentUpdate = silent;
+    
+    if (!socket || !socket.connected) {
+        document.getElementById('online-players-list').innerHTML = 
+            '<div class="text-center text-muted py-3">连接中...</div>';
+        _isLoadingPlayers = false;
+        return;
+    }
+    
+    // 只在非静默更新且是第一页时显示加载状态
+    const container = document.getElementById('online-players-list');
+    if (!silent && window._invitePage === 1) {
+        container.innerHTML = 
+            '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>';
+    }
+    
+    console.log('请求在线玩家列表, page:', window._invitePage);
+    socket.emit('get_online_players', {
+        page: window._invitePage,
+        page_size: 50
+    });
+}
+
+function invitePlayer(targetUserId, targetUserName) {
+    _invitedPlayers.add(targetUserId);
+    socket.emit('invite_player', {
+        room_code: roomCode,
+        target_user_id: targetUserId
+    });
+}
+
+function loadMorePlayers() {
+    window._invitePage++;
+    loadOnlinePlayers(true);
+}
+</script>
+
+<!-- 邀请队友模态框 -->
+<div class="modal fade" id="inviteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-person-plus"></i> 邀请在线队友</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="max-height: 500px; overflow-y: auto;" id="invite-modal-body">
+                <div id="online-players-list">
+                    <div class="text-center text-muted py-3">加载中...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 游戏邀请通知模态框 -->
+<div class="modal fade" id="gameInviteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-envelope"></i> 收到游戏邀请</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="invite-info"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="decline-invite-btn">
+                    <i class="bi bi-x-circle"></i> 拒绝
+                </button>
+                <button type="button" class="btn btn-primary" id="accept-invite-btn">
+                    <i class="bi bi-check-circle"></i> 接受并加入
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

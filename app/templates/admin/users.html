@@ -1,0 +1,809 @@
+{% extends "admin/base.html" %}
+
+{% block title %}用户管理 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <!-- 顶部操作栏 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-people"></i> 用户管理</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                <i class="bi bi-person-plus me-1"></i>添加用户
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importUsersModal">
+                <i class="bi bi-file-earmark-arrow-up me-1"></i>批量导入
+            </button>
+            <a href="{{ url_for('admin.export_users', search=search, school=school, grade=grade, major=major, class_name=class_name, role=request.args.get('role'), can_edit=request.args.get('can_edit'), is_active=request.args.get('is_active')) }}" class="btn btn-outline-success">
+                <i class="bi bi-download me-1"></i>导出
+            </a>
+        </div>
+    </div>
+
+    <!-- 搜索和筛选 -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <input type="text" class="form-control" name="search" 
+                           value="{{ search | e }}" placeholder="搜索用户名/邮箱/昵称/姓名/学号">
+                </div>
+                <div class="col-md-2">
+                    <select name="school" class="form-select">
+                        <option value="">全部学校</option>
+                        {% for item in dict_options.schools %}
+                        <option value="{{ item.value }}" {{ 'selected' if school == item.value }}>{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="grade" class="form-select">
+                        <option value="">全部年级</option>
+                        {% for item in dict_options.grades %}
+                        <option value="{{ item.value }}" {{ 'selected' if grade == item.value }}>{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="major" class="form-select">
+                        <option value="">全部专业</option>
+                        {% for item in dict_options.majors %}
+                        <option value="{{ item.value }}" {{ 'selected' if major == item.value }}>{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="class_name" class="form-select">
+                        <option value="">全部班级</option>
+                        {% for item in dict_options.classes %}
+                        <option value="{{ item.value }}" {{ 'selected' if class_name == item.value }}>{{ item.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <select name="is_active" class="form-select">
+                        <option value="">全部状态</option>
+                        <option value="1" {{ 'selected' if request.args.get('is_active') == '1' }}>正常</option>
+                        <option value="0" {{ 'selected' if request.args.get('is_active') == '0' }}>禁用</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="role" class="form-select">
+                        <option value="">全部角色</option>
+                        <option value="admin" {{ 'selected' if request.args.get('role') == 'admin' }}>管理员</option>
+                        <option value="teacher" {{ 'selected' if request.args.get('role') == 'teacher' }}>教师</option>
+                        <option value="student" {{ 'selected' if request.args.get('role') == 'student' }}>学生</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="can_edit" class="form-select">
+                        <option value="">资料权限</option>
+                        <option value="1" {{ 'selected' if request.args.get('can_edit') == '1' }}>可修改</option>
+                        <option value="0" {{ 'selected' if request.args.get('can_edit') == '0' }}>禁止修改</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search me-1"></i>搜索
+                    </button>
+                    <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-lg me-1"></i>重置
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 批量操作栏 -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="select-all" onchange="toggleSelectAll()">
+                        <label class="form-check-label" for="select-all">全选</label>
+                    </div>
+                    <span class="text-muted">已选 <span id="selected-count">0</span> 项</span>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <select class="form-select form-select-sm" id="batchActionSelect" style="width: auto; min-width: 160px;">
+                        <option value="">-- 批量操作 --</option>
+                        <optgroup label="状态管理">
+                            <option value="activate">✅ 批量激活</option>
+                            <option value="deactivate">❌ 批量禁用</option>
+                        </optgroup>
+                        <optgroup label="角色设置">
+                            <option value="set_admin">🛡️ 设为管理员</option>
+                            <option value="set_teacher">🎓 设为教师</option>
+                            <option value="remove_admin">取消管理员</option>
+                            <option value="remove_teacher">取消教师</option>
+                        </optgroup>
+                        <optgroup label="资料权限">
+                            <option value="unlock_profile">🔓 允许修改资料</option>
+                            <option value="lock_profile">🔒 禁止修改资料</option>
+                        </optgroup>
+                        <optgroup label="删除操作">
+                            <option value="delete">🗑️ 批量删除</option>
+                        </optgroup>
+                    </select>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="batchExecuteBtn">
+                        <i class="bi bi-play-fill me-1"></i>执行
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户列表 -->
+    <form id="batch-form" method="POST" action="{{ url_for('admin.batch_users') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" id="batch-action">
+        <input type="hidden" name="user_ids" id="batch-user-ids">
+    </form>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th width="30"></th>
+                        <th>ID</th>
+                        <th>头像</th>
+                        <th>用户名/昵称</th>
+                        <th>姓名</th>
+                        <th>学号</th>
+                        <th>学校</th>
+                        <th>年级</th>
+                        <th>积分</th>
+                        <th>状态</th>
+                        <th>权限</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in pagination.items %}
+                    <tr data-user-id="{{ user.id }}">
+                        <td><input type="checkbox" class="user-checkbox" value="{{ user.id }}" onchange="updateSelectedCount()"></td>
+                        <td>{{ user.id }}</td>
+                        <td>
+                            <img src="{{ user.get_avatar_url() }}" class="rounded-circle"
+                                 style="width: 32px; height: 32px; object-fit: cover;">
+                        </td>
+                        <td>
+                            {{ user.nickname or user.username }}
+                            {% if user.is_admin %}
+                            <span class="badge bg-danger">管理员</span>
+                            {% elif user.role == 'teacher' %}
+                            <span class="badge bg-info">教师</span>
+                            <span class="badge bg-secondary" title="已开启功能权限数量">{{ user.can_manage_subjects|int + user.can_manage_chapters|int + user.can_manage_questions|int + user.can_import_questions|int + user.can_export_questions|int + user.can_import_students|int + user.can_view_student_analysis|int + user.can_view_knowledge_analysis|int }}/8</span>
+                            {% else %}
+                            <span class="badge bg-success">学生</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.real_name or '-' }}</td>
+                        <td>{{ user.student_id or '-' }}</td>
+                        <td>{{ user.school or '-' }}</td>
+                        <td>{{ user.grade or '-' }}</td>
+                        <td>
+                            <span class="badge bg-primary">{{ user.total_points }}</span>
+                            {% if user.current_tier %}
+                            <span class="tier-badge-small" style="background-color: {{ user.current_tier.color }}; font-size: 11px; padding: 2px 8px; margin-left: 4px; white-space: nowrap;">
+                                {% if user.current_tier.icon %}
+                                <img src="/static/images/tiers/{{ user.current_tier.icon }}" style="width: 14px; height: 14px; vertical-align: middle;">
+                                {% endif %}
+                                {{ user.current_tier.display_name }}
+                            </span>
+                            {% else %}
+                            <small class="text-muted">未定段</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set lock_info = user_lock_status.get(user.id) %}
+                            {% if lock_info and lock_info.is_locked %}
+                            <span class="badge bg-danger" title="账户已锁定，剩余{{ lock_info.remaining_minutes }}分钟，失败{{ lock_info.fail_count }}次">
+                                <i class="bi bi-lock-fill"></i> 已锁定
+                            </span>
+                            {% elif user.is_active %}
+                            <span class="badge bg-success">
+                                正常
+                            </span>
+                            {% else %}
+                            <span class="badge bg-danger">
+                                禁用
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.can_edit_profile %}
+                            <span class="badge bg-success">可修改</span>
+                            {% else %}
+                            <span class="badge bg-warning">禁止</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('admin.edit_user', id=user.id) }}" class="btn btn-outline-primary" title="编辑">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% set lock_info = user_lock_status.get(user.id) %}
+                                {% if lock_info and lock_info.is_locked %}
+                                <button class="btn btn-outline-warning" title="解锁账户" onclick='unlockUser({{ user.id }}, {{ (user.nickname if user.nickname else user.username) | tojson }})'>
+                                    <i class="bi bi-unlock"></i>
+                                </button>
+                                {% endif %}
+                                <button class="btn btn-outline-danger" title="删除" onclick='deleteUser({{ user.id }}, {{ user.username | tojson }})'>
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="12" class="text-center text-muted py-4">暂无用户</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 分页 -->
+    {% set filter_args = {'search': search, 'school': school, 'grade': grade, 'major': major, 'class_name': class_name, 'role': request.args.get('role'), 'can_edit': request.args.get('can_edit'), 'is_active': request.args.get('is_active')} %}
+    {% if pagination.pages > 1 or per_page != 20 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if pagination.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.users', page=pagination.prev_num, per_page=per_page, **filter_args) }}">上一页</a>
+            </li>
+            {% endif %}
+            
+            {% for page_num in pagination.iter_pages() %}
+                {% if page_num %}
+                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin.users', page=page_num, per_page=per_page, **filter_args) }}">{{ page_num }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if pagination.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.users', page=pagination.next_num, per_page=per_page, **filter_args) }}">下一页</a>
+            </li>
+            {% endif %}
+        </ul>
+        
+        <div class="d-flex align-items-center justify-content-center gap-2 mt-2">
+            <span class="text-muted small">每页显示</span>
+            <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;">
+                {% for pp in [10, 20, 50, 100, 200] %}
+                <option value="{{ pp }}" {% if pp == per_page %}selected{% endif %}>{{ pp }} 条</option>
+                {% endfor %}
+            </select>
+        </div>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- 添加用户模态框 -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin.create_user') }}" id="addUserForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-person-plus"></i> 添加用户</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>填写说明：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><span class="text-danger">*</span> 为<strong>必填项</strong>（共4项），其他为可选项</li>
+                            <li><strong>用户名</strong>：用于登录系统，必须唯一（英文/数字，3-64个字符）</li>
+                            <li><strong>密码</strong>：建议6位以上</li>
+                            <li><strong>真实姓名</strong>：学生的真实姓名（支持中文）</li>
+                            <li><strong>学号</strong>：学生唯一标识（纯数字）</li>
+                            <li><strong>邮箱</strong>：留空时系统会自动生成（格式：用户名@studyclash.local）</li>
+                        </ul>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">用户名 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="username" id="username"
+                                   required minlength="3" maxlength="64"
+                                   pattern="[a-zA-Z0-9_]+" title="只能包含字母、数字和下划线"
+                                   placeholder="请输入用户名（登录账号）">
+                            <div class="invalid-feedback">用户名为必填项，3-64个字符，只允许字母、数字和下划线</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">密码 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="password" id="password"
+                                   required minlength="6" maxlength="128"
+                                   placeholder="请输入密码（建议6位以上）">
+                            <div class="invalid-feedback">密码为必填项，至少6个字符</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">真实姓名 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="real_name" id="real_name"
+                                   required maxlength="64"
+                                   placeholder="请输入真实姓名">
+                            <div class="invalid-feedback">姓名为必填项</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">学号 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="student_id" id="student_id"
+                                   required maxlength="32" pattern="[0-9]+" title="学号必须是纯数字"
+                                   placeholder="请输入学号（纯数字）">
+                            <div class="invalid-feedback">学号为必填项，必须是纯数字</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">邮箱</label>
+                            <input type="email" class="form-control" name="email" id="email"
+                                   maxlength="120"
+                                   placeholder="选填，留空则自动生成">
+                            <div class="form-text text-muted">留空将自动生成：用户名@studyclash.local</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">昵称</label>
+                            <input type="text" class="form-control" name="nickname" id="nickname"
+                                   maxlength="64"
+                                   placeholder="选填，默认使用姓名">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">手机号码</label>
+                            <input type="tel" class="form-control" name="phone" id="phone"
+                                   maxlength="20" pattern="[0-9+\- ]*"
+                                   placeholder="选填">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">学校</label>
+                            <select class="form-select" name="school" id="school">
+                                <option value="">请选择学校（选填）</option>
+                                {% for option in dict_options.schools %}
+                                <option value="{{ option.value }}">{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">年级</label>
+                            <select class="form-select" name="grade" id="grade">
+                                <option value="">请选择年级（选填）</option>
+                                {% for option in dict_options.grades %}
+                                <option value="{{ option.value }}">{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">专业/方向</label>
+                            <select class="form-select" name="major" id="major">
+                                <option value="">请选择专业（选填）</option>
+                                {% for option in dict_options.majors %}
+                                <option value="{{ option.value }}">{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">班级</label>
+                            <select class="form-select" name="class_name" id="class_name">
+                                <option value="">请选择班级（选填）</option>
+                                {% for option in dict_options.classes %}
+                                <option value="{{ option.value }}">{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-12">
+                            <hr>
+                            <h6 class="mb-3"><i class="bi bi-gear"></i> 账户设置</h6>
+                            <div class="mb-3">
+                                <label class="form-label"><i class="bi bi-person-badge"></i> 用户角色</label>
+                                <select class="form-select" name="role" id="role">
+                                    <option value="student">学生</option>
+                                    <option value="teacher">教师</option>
+                                    <option value="admin">管理员</option>
+                                </select>
+                                <div class="form-text">教师可导入学生和题目，管理员拥有全部权限</div>
+                            </div>
+                            <div class="form-check form-switch mt-2">
+                                <input type="checkbox" class="form-check-input" id="can_edit_profile" name="can_edit_profile" checked>
+                                <label class="form-check-label" for="can_edit_profile">
+                                    <i class="bi bi-pencil-square"></i> 允许修改个人资料
+                                    <small class="text-muted d-block">用户可以自行编辑个人信息</small>
+                                </label>
+                            </div>
+                            <div class="form-check form-switch mt-2">
+                                <input type="checkbox" class="form-check-input" id="is_active" name="is_active" checked>
+                                <label class="form-check-label" for="is_active">
+                                    <i class="bi bi-person-check"></i> 激活账户
+                                    <small class="text-muted d-block">取消勾选将禁用该账户</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitAddUser">
+                        <i class="bi bi-check-lg"></i> 确认添加
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 批量导入用户模态框 -->
+<div class="modal fade" id="importUsersModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin.import_users') }}" enctype="multipart/form-data" id="importUsersForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-file-earmark-arrow-up"></i> 批量导入用户</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> <strong>导入说明：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><strong>支持格式：</strong>Excel (.xlsx, .xls) 或 CSV 文件</li>
+                            <li><strong class="text-danger">⭐ 必填字段（必须填写，共4项）：</strong>
+                                <ul>
+                                    <li><code>username</code> - <strong>用户名</strong>（用于登录，必须唯一）</li>
+                                    <li><code>real_name</code> - <strong>真实姓名</strong></li>
+                                    <li><code>password</code> - <strong>密码</strong>（建议6位以上）</li>
+                                    <li><code>student_id</code> - <strong>学号</strong>（学生唯一标识，纯数字）</li>
+                                </ul>
+                            </li>
+                            <li><strong>可选字段（可以不填）：</strong>
+                                <ul>
+                                    <li><code>email</code> - 邮箱（留空则自动生成：用户名@studyclash.local）</li>
+                                    <li><code>nickname</code> - 昵称（留空则使用姓名）</li>
+                                    <li><code>phone, school, grade, major, class_name</code> - 其他信息</li>
+                                </ul>
+                            </li>
+                            <li><strong>重复处理：</strong>用户名或邮箱已存在时将自动跳过该行并提示错误</li>
+                            <li><strong>数据量限制：</strong>单次最多导入 500 条记录</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-download"></i> 第一步：下载导入模板
+                        </label>
+                        <div class="mt-2">
+                            <a href="{{ url_for('admin.download_import_template') }}" class="btn btn-outline-success btn-sm">
+                                <i class="bi bi-file-earmark-spreadsheet"></i> 下载 Excel 模板
+                            </a>
+                            <small class="text-muted d-block mt-1">模板包含两个工作表：数据表（填写用户）+ 说明表（查看规则）</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-upload"></i> 第二步：上传文件
+                        </label>
+                        <input type="file" class="form-control" name="file" id="importFile"
+                               accept=".xlsx,.xls,.csv" required
+                               onchange="validateImportFile(this)">
+                        <div class="invalid-feedback">请选择 Excel 或 CSV 文件</div>
+                        <div class="form-text text-muted">支持 .xlsx, .xls, .csv 格式，文件大小不超过 10MB</div>
+                        <div id="fileInfo" class="mt-2"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-gear"></i> 第三步：设置默认选项
+                        </label>
+                        <div class="border rounded p-3 bg-light">
+                            <div class="form-check form-switch mb-2">
+                                <input type="checkbox" class="form-check-input" name="is_active" id="import_is_active" checked>
+                                <label class="form-check-label" for="import_is_active">
+                                    导入后自动激活账户
+                                    <small class="text-muted d-block">取消勾选则账户处于禁用状态</small>
+                                </label>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input type="checkbox" class="form-check-input" name="can_edit_profile" id="import_can_edit_profile" checked>
+                                <label class="form-check-label" for="import_can_edit_profile">
+                                    允许用户修改个人资料
+                                    <small class="text-muted d-block">取消勾选则禁止用户自行编辑信息</small>
+                                </label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input type="checkbox" class="form-check-input" name="set_admin" id="import_set_admin">
+                                <label class="form-check-label" for="import_set_admin">
+                                    将所有导入用户设为管理员
+                                    <small class="text-muted d-block text-warning">⚠️ 谨慎操作，管理员拥有系统管理权限</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>重要提示：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>上传后将进入<strong>预览确认页面</strong>，您可以检查数据后再决定是否导入</li>
+                            <li>系统会自动校验必填项和数据格式，不合格的数据将被标记为红色</li>
+                            <li>在预览页面您还可以手动修改个别用户的信息</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitImport">
+                        <i class="bi bi-cloud-upload"></i> 上传并预览
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+// 批量操作下拉选择 + 执行按钮
+document.getElementById('batchExecuteBtn').addEventListener('click', function() {
+    const select = document.getElementById('batchActionSelect');
+    const action = select.value;
+    if (!action) {
+        alert('请先选择要执行的操作');
+        return;
+    }
+    select.value = '';
+    batchAction(action);
+});
+
+// 每页显示数量切换
+document.getElementById('perPageSelect').addEventListener('change', function() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('per_page', this.value);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+});
+
+// Modal关闭时重置添加用户表单
+document.getElementById('addUserModal').addEventListener('hidden.bs.modal', function() {
+    const form = document.getElementById('addUserForm');
+    form.reset();
+});
+
+// 添加用户表单验证
+document.getElementById('addUserForm').addEventListener('submit', function(e) {
+    const form = this;
+    const username = form.username.value.trim();
+    const password = form.password.value.trim();
+    const realName = form.real_name.value.trim();
+
+    // 前端基础验证
+    if (!username || username.length < 3) {
+        e.preventDefault();
+        form.username.classList.add('is-invalid');
+        alert('请输入有效的用户名（至少3个字符）');
+        form.username.focus();
+        return false;
+    }
+
+    // 用户名格式验证
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(username)) {
+        e.preventDefault();
+        form.username.classList.add('is-invalid');
+        alert('用户名只能包含字母、数字和下划线');
+        form.username.focus();
+        return false;
+    }
+
+    if (!password || password.length < 6) {
+        e.preventDefault();
+        form.password.classList.add('is-invalid');
+        alert('密码至少需要6个字符');
+        form.password.focus();
+        return false;
+    }
+
+    if (!realName) {
+        e.preventDefault();
+        form.real_name.classList.add('is-invalid');
+        alert('请输入真实姓名');
+        form.real_name.focus();
+        return false;
+    }
+
+    // 学号验证（必填）
+    const studentId = form.student_id.value.trim();
+    if (!studentId) {
+        e.preventDefault();
+        form.student_id.classList.add('is-invalid');
+        alert('请输入学号');
+        form.student_id.focus();
+        return false;
+    }
+
+    // 学号格式验证（纯数字）
+    const studentIdRegex = /^[0-9]+$/;
+    if (!studentIdRegex.test(studentId)) {
+        e.preventDefault();
+        form.student_id.classList.add('is-invalid');
+        alert('学号必须是纯数字');
+        form.student_id.focus();
+        return false;
+    }
+
+    // 清除所有invalid状态
+    [form.username, form.password, form.real_name, form.student_id].forEach(field => {
+        field.classList.remove('is-invalid');
+    });
+
+    return true;
+});
+
+// 导入文件验证
+function validateImportFile(input) {
+    const file = input.files[0];
+    const fileInfo = document.getElementById('fileInfo');
+
+    if (!file) {
+        fileInfo.innerHTML = '';
+        input.classList.remove('is-valid', 'is-invalid');
+        return;
+    }
+
+    // 文件大小限制 (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        fileInfo.innerHTML = `<div class="alert alert-danger py-2">
+            <i class="bi bi-exclamation-circle"></i> 文件过大！最大支持 10MB，当前文件：${(file.size / 1024 / 1024).toFixed(2)} MB
+        </div>`;
+        input.classList.add('is-invalid');
+        input.classList.remove('is-valid');
+        input.value = '';
+        return;
+    }
+
+    // 文件格式验证
+    const allowedTypes = ['.xlsx', '.xls', '.csv'];
+    const fileName = file.name.toLowerCase();
+    const isValidFormat = allowedTypes.some(ext => fileName.endsWith(ext));
+
+    if (!isValidFormat) {
+        fileInfo.innerHTML = `<div class="alert alert-danger py-2">
+            <i class="bi bi-exclamation-circle"></i> 不支持的文件格式！请上传 .xlsx, .xls 或 .csv 文件
+        </div>`;
+        input.classList.add('is-invalid');
+        input.classList.remove('is-valid');
+        input.value = '';
+        return;
+    }
+
+    // 显示文件信息
+    const fileSize = file.size < 1024 * 1024 ?
+        `${(file.size / 1024).toFixed(1)} KB` :
+        `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+
+    fileInfo.innerHTML = `<div class="alert alert-success py-2">
+        <i class="bi bi-check-circle"></i> 已选择文件：<strong>${file.name}</strong> (${fileSize})
+    </div>`;
+    input.classList.remove('is-invalid');
+    input.classList.add('is-valid');
+}
+
+// 导入表单提交前确认
+document.getElementById('importUsersForm').addEventListener('submit', function(e) {
+    const fileInput = this.file;
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        e.preventDefault();
+        fileInput.classList.add('is-invalid');
+        alert('请选择要导入的文件');
+        return false;
+    }
+
+    // 确认提示
+    const setAdmin = document.getElementById('import_set_admin').checked;
+    let confirmMsg = '确定要上传文件进行预览吗？\n\n';
+    if (setAdmin) {
+        confirmMsg += '⚠️ 注意：您已选择将所有导入用户设为管理员！\n\n';
+    }
+    confirmMsg += '上传后将显示数据预览页面，您可以检查并修改数据后再确认导入。';
+
+    if (!confirm(confirmMsg)) {
+        e.preventDefault();
+        return false;
+    }
+});
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.user-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+    document.getElementById('selected-count').textContent = checkboxes.length;
+    
+    const selectAll = document.getElementById('select-all');
+    if (checkboxes.length > 0 && checkboxes.length === document.querySelectorAll('.user-checkbox').length) {
+        selectAll.checked = true;
+    } else {
+        selectAll.checked = false;
+    }
+}
+
+function batchAction(action) {
+    const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('请先选择要操作的用户');
+        return;
+    }
+    
+    let confirmMessage = '';
+    switch(action) {
+        case 'activate':
+            confirmMessage = '确定要激活选中的 ' + checkboxes.length + ' 个用户吗？';
+            break;
+        case 'deactivate':
+            confirmMessage = '确定要禁用选中的 ' + checkboxes.length + ' 个用户吗？';
+            break;
+        case 'lock_profile':
+            confirmMessage = '确定要禁止选中的 ' + checkboxes.length + ' 个用户修改资料吗？';
+            break;
+        case 'unlock_profile':
+            confirmMessage = '确定要允许选中的 ' + checkboxes.length + ' 个用户修改资料吗？';
+            break;
+        case 'set_admin':
+            confirmMessage = '确定要将选中的 ' + checkboxes.length + ' 个用户设为管理员吗？';
+            break;
+        case 'remove_admin':
+            confirmMessage = '确定要取消选中的 ' + checkboxes.length + ' 个用户的管理员权限吗？';
+            break;
+        case 'delete':
+            confirmMessage = '确定要删除选中的 ' + checkboxes.length + ' 个用户吗？此操作不可恢复！';
+            break;
+    }
+    
+    if (confirm(confirmMessage)) {
+        const userIds = Array.from(checkboxes).map(cb => cb.value);
+        document.getElementById('batch-action').value = action;
+        document.getElementById('batch-user-ids').value = JSON.stringify(userIds);
+        document.getElementById('batch-form').submit();
+    }
+}
+
+function deleteUser(userId, username) {
+    if (confirm('确定要删除用户 "' + username + '" 吗？此操作不可恢复！')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/users/' + userId + '/delete';
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = '{{ csrf_token() }}';
+        form.appendChild(csrfInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function unlockUser(userId, username) {
+    if (confirm('确定要解锁用户 "' + username + '" 的账户吗？\n解锁后该用户可以立即重新登录。')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/users/' + userId + '/unlock';
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = '{{ csrf_token() }}';
+        form.appendChild(csrfInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,351 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}知识点分析{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <!-- 页面标题 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4><i class="bi bi-graph-up-arrow"></i> 知识点分析</h4>
+            <p class="text-muted mb-0">分析班级/专业学生在各知识点的掌握情况，精准识别薄弱环节</p>
+        </div>
+    </div>
+
+    <!-- 筛选控制栏 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row align-items-center g-3">
+                        <!-- 分类维度切换 -->
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold mb-1">分类维度</label>
+                            <ul class="nav nav-pills nav-sm" id="categoryTabs">
+                                <li class="nav-item">
+                                    <a class="nav-link active py-1" href="#" data-category="class_name">
+                                        <i class="bi bi-people-fill"></i> 按班级
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link py-1" href="#" data-category="major">
+                                        <i class="bi bi-bookmark-fill"></i> 按专业
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- 分类值选择 -->
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold mb-1">选择分类</label>
+                            <select class="form-select form-select-sm" id="categoryValue">
+                                <option value="">请选择...</option>
+                            </select>
+                        </div>
+                        <!-- 学科选择 -->
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold mb-1">学科</label>
+                            <select class="form-select form-select-sm" id="subjectSelect">
+                                <option value="">请选择学科</option>
+                                {% for s in subjects %}
+                                <option value="{{ s.id }}">{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <!-- 时间范围 -->
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold mb-1">时间范围</label>
+                            <select class="form-select form-select-sm" id="timeRange">
+                                <option value="7d">近7天</option>
+                                <option value="30d" selected>近30天</option>
+                                <option value="90d">近90天</option>
+                                <option value="all">全部时间</option>
+                            </select>
+                        </div>
+                        <!-- 对比分析入口 -->
+                        <div class="col-md-3 text-end">
+                            <label class="form-label fw-bold mb-1 d-block">&nbsp;</label>
+                            <a href="{{ url_for('admin.knowledge_comparison') }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-bar-chart-steps"></i> 班级/专业对比
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 预警与建议区域 -->
+    <div class="row mb-4" id="alertSection" style="display:none;">
+        <!-- 薄弱知识点预警 -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-exclamation-triangle text-warning"></i> 薄弱知识点预警</h6>
+                    <span class="badge bg-danger" id="severeWeakCount">0</span>
+                </div>
+                <div class="card-body p-0" id="weakChaptersList" style="max-height: 300px; overflow-y: auto;">
+                </div>
+            </div>
+        </div>
+        <!-- 教学建议 -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2">
+                    <h6 class="mb-0"><i class="bi bi-lightbulb text-info"></i> 教学建议</h6>
+                </div>
+                <div class="card-body p-0" id="suggestionsList" style="max-height: 300px; overflow-y: auto;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 章节掌握度概览 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-list-check"></i> 章节掌握度概览 <small class="text-muted" id="chapterCount"></small></h5>
+                </div>
+                <div class="card-body p-0" id="chaptersContainer">
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-funnel fs-1"></i>
+                        <p class="mt-2">请选择班级/专业和学科后查看分析数据</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.mastery-bar {
+    height: 8px;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+}
+.chapter-row {
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.chapter-row:hover {
+    background-color: #f8f9fa;
+}
+.suggestion-item {
+    border-left: 3px solid;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+}
+.weak-item {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+</style>
+
+<script>
+let currentCategory = 'class_name';
+let currentCategoryValue = '';
+let currentSubjectId = '';
+let currentTimeRange = '30d';
+
+// 分类维度切换
+document.querySelectorAll('#categoryTabs .nav-link').forEach(tab => {
+    tab.addEventListener('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('#categoryTabs .nav-link').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        currentCategory = this.dataset.category;
+        loadCategoryOptions();
+    });
+});
+
+// 加载分类选项
+function loadCategoryOptions() {
+    const select = document.getElementById('categoryValue');
+    select.innerHTML = '<option value="">加载中...</option>';
+    
+    fetch(`/admin/api/knowledge-analysis/category-options?category=${currentCategory}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                select.innerHTML = '<option value="">请选择...</option>';
+                res.data.options.forEach(opt => {
+                    select.innerHTML += `<option value="${opt}">${opt}</option>`;
+                });
+            }
+        })
+        .catch(() => {
+            select.innerHTML = '<option value="">加载失败</option>';
+        });
+}
+
+// 筛选变化时加载数据
+document.getElementById('categoryValue').addEventListener('change', function() {
+    currentCategoryValue = this.value;
+    loadOverview();
+});
+document.getElementById('subjectSelect').addEventListener('change', function() {
+    currentSubjectId = this.value;
+    loadOverview();
+});
+document.getElementById('timeRange').addEventListener('change', function() {
+    currentTimeRange = this.value;
+    loadOverview();
+});
+
+// 加载概览数据
+function loadOverview() {
+    if (!currentCategoryValue || !currentSubjectId) {
+        document.getElementById('chaptersContainer').innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-funnel fs-1"></i>
+                <p class="mt-2">请选择班级/专业和学科后查看分析数据</p>
+            </div>`;
+        document.getElementById('alertSection').style.display = 'none';
+        return;
+    }
+    
+    document.getElementById('chaptersContainer').innerHTML = `
+        <div class="text-center text-muted py-5">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <p class="mt-2">加载中...</p>
+        </div>`;
+    
+    const params = new URLSearchParams({
+        category: currentCategory,
+        value: currentCategoryValue,
+        subject_id: currentSubjectId,
+        time_range: currentTimeRange
+    });
+    
+    fetch(`/admin/api/knowledge-analysis/overview?${params}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                renderOverview(res.data);
+            } else {
+                document.getElementById('chaptersContainer').innerHTML = `
+                    <div class="text-center text-danger py-5">
+                        <i class="bi bi-exclamation-circle fs-1"></i>
+                        <p class="mt-2">${res.error || '加载失败'}</p>
+                    </div>`;
+            }
+        })
+        .catch(() => {
+            document.getElementById('chaptersContainer').innerHTML = `
+                <div class="text-center text-danger py-5">
+                    <i class="bi bi-exclamation-circle fs-1"></i>
+                    <p class="mt-2">网络错误，请稍后重试</p>
+                </div>`;
+        });
+}
+
+// 渲染概览数据
+function renderOverview(data) {
+    // 渲染预警和建议
+    const alertSection = document.getElementById('alertSection');
+    if (data.weak_count > 0) {
+        alertSection.style.display = '';
+        document.getElementById('severeWeakCount').textContent = data.severe_weak_count;
+        
+        // 薄弱章节列表
+        const weakList = document.getElementById('weakChaptersList');
+        let weakHtml = '';
+        data.chapters.filter(ch => ch.correct_rate !== null && ch.correct_rate < 60).sort((a,b) => a.correct_rate - b.correct_rate).forEach(ch => {
+            const icon = ch.correct_rate < 40 ? '<i class="bi bi-exclamation-diamond text-danger"></i>' : '<i class="bi bi-exclamation-triangle text-warning"></i>';
+            weakHtml += `
+                <div class="weak-item d-flex justify-content-between align-items-center">
+                    <div>
+                        ${icon}
+                        <a href="/admin/knowledge-analysis/chapter/${ch.chapter_id}?category=${currentCategory}&value=${currentCategoryValue}&time_range=${currentTimeRange}" class="text-decoration-none ms-1">${ch.chapter_name}</a>
+                    </div>
+                    <span class="badge" style="background:${ch.mastery_color}">${ch.correct_rate}%</span>
+                </div>`;
+        });
+        weakList.innerHTML = weakHtml || '<div class="p-3 text-muted">暂无薄弱章节</div>';
+        
+        // 教学建议
+        const sugList = document.getElementById('suggestionsList');
+        let sugHtml = '';
+        if (data.suggestions && data.suggestions.length > 0) {
+            data.suggestions.forEach(s => {
+                const colors = {'severe_weak': '#dc3545', 'weak': '#fd7e14', 'average': '#ffc107'};
+                const color = colors[s.mastery_level] || '#6c757d';
+                sugHtml += `
+                    <div class="suggestion-item" style="border-left-color:${color}">
+                        <div class="d-flex justify-content-between">
+                            <strong class="text-sm">${s.chapter_name}</strong>
+                            <span class="badge" style="background:${color};font-size:0.7rem">${s.mastery_label} ${s.correct_rate}%</span>
+                        </div>
+                        <p class="mb-0 mt-1 text-muted" style="font-size:0.8rem">${s.action}</p>
+                    </div>`;
+            });
+        } else {
+            sugHtml = '<div class="p-3 text-muted">整体掌握情况良好，暂无特别建议</div>';
+        }
+        sugList.innerHTML = sugHtml;
+    } else {
+        alertSection.style.display = 'none';
+    }
+    
+    // 渲染章节表格
+    const container = document.getElementById('chaptersContainer');
+    document.getElementById('chapterCount').textContent = `(${data.chapters.length}个章节)`;
+    
+    if (data.chapters.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-5"><p>该学科下暂无章节</p></div>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:5%">#</th>
+                        <th style="width:30%">章节名称</th>
+                        <th style="width:25%">掌握度</th>
+                        <th style="width:12%">等级</th>
+                        <th style="width:10%">答题数</th>
+                        <th style="width:10%">正确数</th>
+                        <th style="width:8%">正确率</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    data.chapters.forEach((ch, idx) => {
+        const rateDisplay = ch.correct_rate !== null ? ch.correct_rate + '%' : '--';
+        const barWidth = ch.correct_rate !== null ? ch.correct_rate : 0;
+        
+        html += `
+                    <tr class="chapter-row" onclick="window.location.href='/admin/knowledge-analysis/chapter/${ch.chapter_id}?category=${currentCategory}&value=${currentCategoryValue}&time_range=${currentTimeRange}'">
+                        <td>${idx + 1}</td>
+                        <td>
+                            <div>${ch.chapter_name}</div>
+                            <small class="text-muted">${ch.full_path}</small>
+                        </td>
+                        <td>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: ${barWidth}%; background-color: ${ch.mastery_color}" 
+                                     aria-valuenow="${barWidth}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </td>
+                        <td><span class="badge" style="background:${ch.mastery_color};color:#fff">${ch.mastery_label}</span></td>
+                        <td>${ch.total_answers}</td>
+                        <td>${ch.correct_count}</td>
+                        <td class="fw-bold" style="color:${ch.mastery_color}">${rateDisplay}</td>
+                    </tr>`;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>`;
+    
+    container.innerHTML = html;
+}
+
+// 初始化加载分类选项
+loadCategoryOptions();
+</script>
+{% endblock %}

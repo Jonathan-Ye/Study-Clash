@@ -1,0 +1,96 @@
+{% extends "admin/base.html" %}
+
+{% block title %}题库备份 - Study Clash{% endblock %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+<div class="row g-4">
+    {# 导出区域 #}
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-download"></i> 题库导出</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> 导出系统题库的完整数据，包含学科、章节、题目及图片信息，可用于备份或迁移到其他系统。
+                </div>
+                <form id="exportForm" method="get" action="{{ url_for('admin.quiz_export_download') }}">
+                    <div class="mb-3">
+                        <label class="form-label">学科</label>
+                        <select name="subject_id" class="form-select" id="subjectSelect">
+                            <option value="">全部学科</option>
+                            {% for s in subjects %}
+                            <option value="{{ s.id }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">导出格式</label>
+                        <select name="format" class="form-select" id="formatSelect">
+                            <option value="json">JSON（含学科/章节数据，推荐用于备份）</option>
+                            <option value="excel">Excel（按学科分工作表）</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">图片处理</label>
+                        <select name="image_mode" class="form-select">
+                            <option value="url_only">仅引用（保留图片URL）</option>
+                            <option value="with_images">包含图片（打包为ZIP）</option>
+                        </select>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-download"></i> 导出题库
+                        </button>
+                        {% if session.get('quiz_export_image_zip_ready') %}
+                        <a href="{{ url_for('admin.quiz_export_download_images') }}" class="btn btn-outline-success">
+                            <i class="bi bi-file-earmark-zip"></i> 下载图片资源包
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# 导入区域 #}
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-upload"></i> 题库导入</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning mb-3">
+                    <i class="bi bi-exclamation-triangle"></i> 导入将修改数据库数据，请谨慎操作。建议先导出备份后再导入。
+                </div>
+                <form method="post" action="{{ url_for('admin.quiz_import_validate') }}" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">数据文件 <span class="text-danger">*</span></label>
+                        <input type="file" name="data_file" class="form-control" accept=".json,.xlsx,.xls" required>
+                        <div class="form-text">支持JSON或Excel格式</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">图片资源包（可选）</label>
+                        <input type="file" name="image_zip" class="form-control" accept=".zip">
+                        <div class="form-text">导出时包含的图片资源包</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">冲突处理策略</label>
+                        <select name="conflict_strategy" class="form-select">
+                            <option value="skip">跳过 - 保留系统已有数据</option>
+                            <option value="overwrite">覆盖 - 用导入数据覆盖已有数据</option>
+                            <option value="append">追加 - 作为新题目插入（忽略ID）</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> 校验并预览
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

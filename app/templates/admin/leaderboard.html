@@ -1,0 +1,137 @@
+{% extends "admin/base.html" %}
+
+{% block title %}排行榜管理 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-trophy"></i> 排行榜管理</h5>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <form class="d-flex flex-wrap gap-2">
+                    <select class="form-select" style="width: auto;" name="period">
+                        <option value="all_time" {% if period == 'all_time' %}selected{% endif %}>总榜</option>
+                        <option value="monthly" {% if period == 'monthly' %}selected{% endif %}>月榜</option>
+                        <option value="weekly" {% if period == 'weekly' %}selected{% endif %}>周榜</option>
+                        <option value="daily" {% if period == 'daily' %}selected{% endif %}>日榜</option>
+                    </select>
+                    <select class="form-select" style="width: auto;" name="category">
+                        <option value="total_points" {% if category == 'total_points' %}selected{% endif %}>总积分</option>
+                        <option value="correct_rate" {% if category == 'correct_rate' %}selected{% endif %}>正确率</option>
+                        <option value="games_won" {% if category == 'games_won' %}selected{% endif %}>胜场数</option>
+                        <option value="streak_days" {% if category == 'streak_days' %}selected{% endif %}>连续天数</option>
+                        <option value="study_time" {% if category == 'study_time' %}selected{% endif %}>学习时长</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary">查看</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="d-flex gap-2">
+                    <form method="post" action="{{ url_for('admin.update_leaderboard_route') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="period" value="{{ period }}">
+                        <input type="hidden" name="category" value="{{ category }}">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-arrow-repeat"></i> 更新排行榜
+                        </button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin.clear_leaderboard_cache') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="bi bi-trash"></i> 清除缓存
+                        </button>
+                    </form>
+                    <a href="{{ url_for('admin.export_leaderboard', period=period, category=category) }}" class="btn btn-info">
+                        <i class="bi bi-download"></i> 导出数据
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>排名</th>
+                        <th>用户</th>
+                        <th>学校</th>
+                        <th>年级/班级</th>
+                        <th>积分</th>
+                        <th>更新时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in pagination.items %}
+                    <tr>
+                        <td>
+                            {% if entry.rank == 1 %}
+                            <span class="badge bg-warning">1</span>
+                            {% elif entry.rank == 2 %}
+                            <span class="badge bg-secondary">2</span>
+                            {% elif entry.rank == 3 %}
+                            <span class="badge bg-danger">3</span>
+                            {% else %}
+                            {{ entry.rank }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ entry.user.nickname or entry.user.username }}</strong>
+                            <br>
+                            <small class="text-muted">@{{ entry.user.username }}</small>
+                        </td>
+                        <td>{{ entry.user.school or '-' }}</td>
+                        <td>
+                            {{ entry.user.grade or '-' }} 
+                            {{ entry.user.class_name or '' }}
+                        </td>
+                        <td><strong class="text-primary">{{ entry.score }}</strong></td>
+                        <td>
+                            {% if entry.updated_at %}
+                            {{ entry.updated_at | to_beijing | strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">暂无数据</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {% if pagination.pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('admin.leaderboard_manage', page=pagination.prev_num, period=period, category=category) }}">上一页</a>
+                </li>
+                {% endif %}
+                
+                {% for page in pagination.iter_pages() %}
+                    {% if page %}
+                    <li class="page-item {% if page == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin.leaderboard_manage', page=page, period=period, category=category) }}">{{ page }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('admin.leaderboard_manage', page=pagination.next_num, period=period, category=category) }}">下一页</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

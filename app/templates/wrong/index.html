@@ -1,0 +1,562 @@
+{% extends "base.html" %}
+
+{% block title %}错题列表 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- 顶部导航 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-0"><i class="bi bi-journal-x"></i> 错题列表</h4>
+            <small class="text-muted">管理、筛选和批量操作你的错题</small>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-speedometer2"></i> 仪表盘
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-3">
+            <!-- 统计卡片 -->
+            <div class="card mb-3" style="border-radius:var(--radius-lg);border:none;box-shadow:var(--shadow);">
+                <div class="card-header text-white" style="background:var(--gradient-primary);border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+                    <h6 class="mb-0"><i class="bi bi-bar-chart"></i> 错题统计</h6>
+                </div>
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--gray-100);">
+                        <span class="small">总错题</span><span class="badge bg-primary">{{ stats.total }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--gray-100);">
+                        <span class="small">未掌握</span><span class="badge bg-danger">{{ stats.not_mastered }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--gray-100);">
+                        <span class="small">已掌握</span><span class="badge bg-success">{{ stats.mastered }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1" style="border-bottom:1px solid var(--gray-100);">
+                        <span class="small">重点标记</span><span class="badge bg-warning text-dark">{{ stats.important }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1">
+                        <span class="small"><i class="bi bi-clock"></i> 今日待复习</span><span class="badge bg-info">{{ stats.review_today }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 筛选条件 -->
+            <div class="card mb-3" style="border-radius:var(--radius-lg);border:none;box-shadow:var(--shadow);">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+                    <h6 class="mb-0"><i class="bi bi-funnel"></i> 筛选条件</h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" id="filter-form">
+                        <div class="mb-2">
+                            <label class="form-label small">学科</label>
+                            <select class="form-select form-select-sm" name="subject_id" id="subject-select">
+                                <option value="">全部学科</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}" {% if request.args.get('subject_id') == subject.id|string %}selected{% endif %}>
+                                    {{ subject.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">章节</label>
+                            <select class="form-select form-select-sm" name="chapter_id" id="chapter-select">
+                                <option value="">全部章节</option>
+                                {% for chapter in chapters %}
+                                <option value="{{ chapter.id }}" {% if request.args.get('chapter_id') == chapter.id|string %}selected{% endif %}>
+                                    {{ chapter.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">掌握状态</label>
+                            <select class="form-select form-select-sm" name="is_mastered">
+                                <option value="">全部</option>
+                                <option value="0" {% if request.args.get('is_mastered') == '0' %}selected{% endif %}>未掌握</option>
+                                <option value="1" {% if request.args.get('is_mastered') == '1' %}selected{% endif %}>已掌握</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">错误原因</label>
+                            <select class="form-select form-select-sm" name="wrong_reason">
+                                <option value="">全部</option>
+                                {% for key, value in wrong_reasons.items() %}
+                                <option value="{{ key }}" {% if request.args.get('wrong_reason') == key %}selected{% endif %}>{{ value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">排序方式</label>
+                            <select class="form-select form-select-sm" name="sort_by">
+                                <option value="created_at" {% if request.args.get('sort_by') == 'created_at' or not request.args.get('sort_by') %}selected{% endif %}>按添加时间</option>
+                                <option value="wrong_count" {% if request.args.get('sort_by') == 'wrong_count' %}selected{% endif %}>按错误次数</option>
+                                <option value="review_count" {% if request.args.get('sort_by') == 'review_count' %}selected{% endif %}>按复习次数</option>
+                                <option value="next_review" {% if request.args.get('sort_by') == 'next_review' %}selected{% endif %}>按复习时间</option>
+                                <option value="important" {% if request.args.get('sort_by') == 'important' %}selected{% endif %}>优先重点</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">关键词</label>
+                            <input type="text" class="form-control form-control-sm" name="keyword" value="{{ request.args.get('keyword', '') }}" placeholder="搜索题目">
+                        </div>
+                        <div class="d-grid gap-1">
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 筛选</button>
+                            <a href="{{ url_for('wrong.list_view') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-counterclockwise"></i> 重置</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 快捷操作 -->
+            <div class="card mb-3" style="border-radius:var(--radius-lg);border:none;box-shadow:var(--shadow);">
+                <div class="card-header" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+                    <h6 class="mb-0"><i class="bi bi-lightning"></i> 快捷操作</h6>
+                </div>
+                <div class="card-body p-2">
+                    <a href="{{ url_for('wrong.review') }}" class="btn btn-danger btn-sm w-100 mb-1">
+                        <i class="bi bi-arrow-repeat"></i> 开始复习
+                    </a>
+                    <a href="{{ url_for('wrong.review', mode='spaced') }}" class="btn btn-info btn-sm w-100 mb-1 text-white">
+                        <i class="bi bi-calendar-check"></i> 间隔复习
+                    </a>
+                    <a href="{{ url_for('wrong.challenge') }}" class="btn btn-warning btn-sm w-100 mb-1 text-dark">
+                        <i class="bi bi-trophy"></i> 闯关模式
+                    </a>
+                    <a href="{{ url_for('wrong.timed_challenge') }}" class="btn btn-outline-primary btn-sm w-100 mb-1">
+                        <i class="bi bi-stopwatch"></i> 限时挑战
+                    </a>
+                    <a href="{{ url_for('wrong.weak_practice') }}" class="btn btn-outline-danger btn-sm w-100 mb-1">
+                        <i class="bi bi-bullseye"></i> 薄弱专练
+                    </a>
+                    <hr class="my-2">
+                    <a href="{{ url_for('wrong.analysis') }}" class="btn btn-outline-info btn-sm w-100 mb-1">
+                        <i class="bi bi-graph-up"></i> 知识分析
+                    </a>
+                    <a href="{{ url_for('wrong.collections') }}" class="btn btn-outline-secondary btn-sm w-100 mb-1">
+                        <i class="bi bi-folder"></i> 收藏夹
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-9">
+            <!-- 批量操作栏 -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small">选中 <strong id="selected-count">0</strong> 项</span>
+                    <button class="btn btn-outline-success btn-sm" onclick="batchMaster()" title="批量标记掌握">
+                        <i class="bi bi-check-circle"></i> 标记掌握
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="batchDelete()" title="批量删除">
+                        <i class="bi bi-trash"></i> 删除
+                    </button>
+                </div>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="toggleSelectAll()" title="全选/取消">
+                        <i class="bi bi-check2-square"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 错题列表 -->
+            <div class="list-group" id="wrong-list">
+                {% for wrong in pagination.items %}
+                <div class="list-group-item wrong-item" data-id="{{ wrong.id }}" style="border-radius:var(--radius);margin-bottom:0.4rem;border:1px solid var(--gray-200);">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="form-check me-2">
+                            <input class="form-check-input wrong-checkbox" type="checkbox" value="{{ wrong.id }}" id="check-{{ wrong.id }}" onchange="updateSelectedCount()">
+                        </div>
+                        <div class="flex-grow-1" style="min-width:0;">
+                            <div class="mb-1 d-flex flex-wrap gap-1">
+                                <span class="badge bg-{{ 'primary' if wrong.question.question_type == 'single' else 'success' if wrong.question.question_type == 'multiple' else 'info' }}">
+                                    {{ '单选' if wrong.question.question_type == 'single' else '多选' if wrong.question.question_type == 'multiple' else '判断' }}
+                                </span>
+                                <span class="badge bg-secondary">{{ wrong.question.subject.name if wrong.question.subject else '综合' }}</span>
+                                <span class="badge bg-{{ 'success' if wrong.is_mastered else 'danger' }}">
+                                    {{ '已掌握' if wrong.is_mastered else '未掌握' }}
+                                </span>
+                                {% if wrong.is_important %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i></span>
+                                {% endif %}
+                                {% if wrong.wrong_reason %}
+                                <span class="badge bg-light text-dark border">{{ wrong.get_wrong_reason_display() }}</span>
+                                {% endif %}
+                            </div>
+                            <p class="mb-1" style="font-size:0.9rem;line-height:1.5;">{{ wrong.question.content[:120] }}{% if wrong.question.content|length > 120 %}...{% endif %}</p>
+                            <div class="small text-muted">
+                                <span class="me-2"><i class="bi bi-x-circle"></i> {{ wrong.wrong_count }}次</span>
+                                <span class="me-2"><i class="bi bi-arrow-repeat"></i> 复习{{ wrong.review_count }}次</span>
+                                <span class="me-2"><i class="bi bi-check-circle"></i> 连对{{ wrong.consecutive_correct }}/{{ config.consecutive_correct_required }}</span>
+                                {% if wrong.next_review_at and not wrong.is_mastered %}
+                                <span class="me-2"><i class="bi bi-calendar"></i> {{ wrong.next_review_at.strftime('%m-%d') }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="ms-2 d-flex flex-column gap-1">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="showReasonModal({{ wrong.id }}, '{{ wrong.wrong_reason or '' }}')" title="标注原因">
+                                <i class="bi bi-tag{{ '-fill' if wrong.wrong_reason else '' }}"></i>
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="toggleImportant({{ wrong.id }})" title="标记重点">
+                                <i class="bi bi-star{{ '-fill' if wrong.is_important else '' }}"></i>
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="showDetail({{ wrong.id }})" title="详情">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <form action="{{ url_for('wrong.delete', id=wrong.id) }}" method="POST" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('确定删除？')" title="删除">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-emoji-smile" style="font-size:3rem;"></i>
+                    <p class="mt-2">太棒了！暂无错题</p>
+                </div>
+                {% endfor %}
+            </div>
+            
+            {% if pagination.pages > 1 %}
+            <nav class="mt-3">
+                <ul class="pagination justify-content-center pagination-sm">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('wrong.list_view', page=pagination.prev_num, subject_id=request.args.get('subject_id'), chapter_id=request.args.get('chapter_id'), is_mastered=request.args.get('is_mastered'), wrong_reason=request.args.get('wrong_reason'), sort_by=request.args.get('sort_by'), keyword=request.args.get('keyword')) }}">上一页</a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page in pagination.iter_pages() %}
+                        {% if page %}
+                        <li class="page-item {% if page == pagination.page %}active{% endif %}">
+                            <a class="page-link" href="{{ url_for('wrong.list_view', page=page, subject_id=request.args.get('subject_id'), chapter_id=request.args.get('chapter_id'), is_mastered=request.args.get('is_mastered'), wrong_reason=request.args.get('wrong_reason'), sort_by=request.args.get('sort_by'), keyword=request.args.get('keyword')) }}">{{ page }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('wrong.list_view', page=pagination.next_num, subject_id=request.args.get('subject_id'), chapter_id=request.args.get('chapter_id'), is_mastered=request.args.get('is_mastered'), wrong_reason=request.args.get('wrong_reason'), sort_by=request.args.get('sort_by'), keyword=request.args.get('keyword')) }}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-eye"></i> 错题详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detail-content">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="reasonModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-tag"></i> 标注错误原因</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">选择这道题做错的原因，帮助分析薄弱环节：</p>
+                <div class="d-grid gap-2" id="reason-options">
+                    {% for key, value in wrong_reasons.items() %}
+                    <button type="button" class="btn btn-outline-primary reason-btn" data-reason="{{ key }}" onclick="selectReason('{{ key }}')">
+                        <i class="bi bi-{{ 'emoji-frown' if key == 'careless' else 'book' if key == 'knowledge' else 'eye' if key == 'understanding' else 'calculator' if key == 'calculation' else 'brain' if key == 'memory' else 'question-circle' }}"></i>
+                        {{ value }}
+                    </button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="selected-reason" value="">
+                <input type="hidden" id="current-wrong-id" value="">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveReason()">
+                    <i class="bi bi-check"></i> 保存
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 选中计数
+function updateSelectedCount() {
+    const count = document.querySelectorAll('.wrong-checkbox:checked').length;
+    document.getElementById('selected-count').textContent = count;
+}
+
+// 全选/取消
+function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('.wrong-checkbox');
+    const allChecked = Array.from(checkboxes).every(c => c.checked);
+    checkboxes.forEach(c => { c.checked = !allChecked; });
+    updateSelectedCount();
+}
+
+document.getElementById('subject-select').addEventListener('change', function() {
+    const subjectId = this.value;
+    const chapterSelect = document.getElementById('chapter-select');
+    
+    chapterSelect.innerHTML = '<option value="">加载中...</option>';
+    
+    if (subjectId) {
+        fetch(`/wrong/api/chapters-by-subject/${subjectId}`)
+            .then(response => response.json())
+            .then(data => {
+                chapterSelect.innerHTML = '<option value="">全部章节</option>';
+                data.forEach(chapter => {
+                    const indent = '—'.repeat(chapter.level - 1);
+                    chapterSelect.innerHTML += `<option value="${chapter.id}">${indent}${chapter.name}</option>`;
+                });
+            });
+    } else {
+        chapterSelect.innerHTML = '<option value="">全部章节</option>';
+    }
+});
+
+function toggleImportant(id) {
+    fetch(`/wrong/${id}/toggle-important`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('操作失败，请重试');
+    });
+}
+
+function showDetail(id) {
+    fetch(`/wrong/${id}/detail`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            const wrong = data.wrong;
+            const question = wrong.question;
+            
+            let html = `
+                <div class="mb-3">
+                    <span class="badge bg-primary me-1">${question.question_type === 'single' ? '单选' : question.question_type === 'multiple' ? '多选' : '判断'}</span>
+                    <span class="badge bg-secondary me-1">${question.subject_name || '综合'}</span>
+                    <span class="badge bg-${wrong.is_mastered ? 'success' : 'danger'}">${wrong.is_mastered ? '已掌握' : '未掌握'}</span>
+                </div>
+                <h5 class="mb-3">${question.content}</h5>
+                <div class="mb-3">
+            `;
+            
+            if (question.options) {
+                for (const [key, value] of Object.entries(question.options)) {
+                    const isCorrect = question.correct_answer.includes(key);
+                    html += `
+                        <div class="p-2 mb-1 rounded ${isCorrect ? 'bg-success text-white' : 'bg-light'}">
+                            <strong>${key}.</strong> ${value}
+                            ${isCorrect ? '<i class="bi bi-check-circle float-end"></i>' : ''}
+                        </div>
+                    `;
+                }
+            }
+            
+            html += `
+                </div>
+                <div class="alert alert-info">
+                    <strong>正确答案：</strong>${question.correct_answer}<br>
+                    <strong>解析：</strong>${question.analysis || '暂无解析'}
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>错误次数：</strong>${wrong.wrong_count}</p>
+                        <p><strong>复习次数：</strong>${wrong.review_count}</p>
+                        <p><strong>连续正确：</strong>${wrong.consecutive_correct}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>错误原因：</strong>${wrong.wrong_reason_display || '未标注'}</p>
+                        <p><strong>最近错误答案：</strong>${wrong.wrong_answer || '-'}</p>
+                        <p><strong>下次复习：</strong>${wrong.next_review_at || '-'}</p>
+                    </div>
+                </div>
+            `;
+            
+            if (data.similar_questions && data.similar_questions.length > 0) {
+                html += `
+                    <hr>
+                    <h6><i class="bi bi-lightning"></i> 相似题目推荐</h6>
+                    <div class="list-group">
+                `;
+                data.similar_questions.forEach(q => {
+                    html += `
+                        <div class="list-group-item">
+                            <small class="text-muted">${q.content.substring(0, 50)}...</small>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            document.getElementById('detail-content').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('detailModal')).show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('加载详情失败');
+        });
+}
+
+function batchDelete() {
+    const checked = document.querySelectorAll('.wrong-checkbox:checked');
+    if (checked.length === 0) {
+        alert('请选择要删除的错题');
+        return;
+    }
+    
+    if (!confirm(`确定要删除选中的 ${checked.length} 道错题吗？`)) {
+        return;
+    }
+    
+    const ids = Array.from(checked).map(c => c.value);
+    
+    fetch('/wrong/batch-delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids: ids})
+    })
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            alert(`成功删除 ${data.deleted_count} 道错题`);
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('删除失败，请重试');
+    });
+}
+
+function batchMaster() {
+    const checked = document.querySelectorAll('.wrong-checkbox:checked');
+    if (checked.length === 0) {
+        alert('请选择要标记的错题');
+        return;
+    }
+    
+    const ids = Array.from(checked).map(c => c.value);
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/wrong/batch-master';
+    
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token() }}';
+    form.appendChild(csrfInput);
+    
+    ids.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids';
+        input.value = id;
+        form.appendChild(input);
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function showReasonModal(wrongId, currentReason) {
+    document.getElementById('current-wrong-id').value = wrongId;
+    document.getElementById('selected-reason').value = currentReason;
+    
+    document.querySelectorAll('.reason-btn').forEach(btn => {
+        btn.classList.remove('btn-primary', 'active');
+        btn.classList.add('btn-outline-primary');
+        if (btn.dataset.reason === currentReason) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-primary', 'active');
+        }
+    });
+    
+    new bootstrap.Modal(document.getElementById('reasonModal')).show();
+}
+
+function selectReason(reason) {
+    document.getElementById('selected-reason').value = reason;
+    
+    document.querySelectorAll('.reason-btn').forEach(btn => {
+        btn.classList.remove('btn-primary', 'active');
+        btn.classList.add('btn-outline-primary');
+        if (btn.dataset.reason === reason) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-primary', 'active');
+        }
+    });
+}
+
+function saveReason() {
+    const wrongId = document.getElementById('current-wrong-id').value;
+    const reason = document.getElementById('selected-reason').value;
+    
+    if (!reason) {
+        alert('请选择错误原因');
+        return;
+    }
+    
+    fetch(`/wrong/${wrongId}/set-reason`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason: reason})
+    })
+    .then(response => {
+        if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('reasonModal')).hide();
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('保存失败，请重试');
+    });
+}
+</script>
+{% endblock %}

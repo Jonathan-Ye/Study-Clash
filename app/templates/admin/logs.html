@@ -1,0 +1,102 @@
+{% extends "admin/base.html" %}
+
+{% block title %}系统日志 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-journal-text"></i> 系统日志</h4>
+        <div class="d-flex gap-2">
+            <form method="POST" action="{{ url_for('admin.logs_clear') }}" class="d-inline"
+                  onsubmit="return confirm('确定清理过期日志？')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash"></i> 清理过期
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="d-flex flex-wrap align-items-center gap-2">
+                <div class="btn-group btn-group-sm" role="group">
+                    <a href="{{ url_for('admin.logs', type='system', search=search, date_start=date_start, date_end=date_end) }}"
+                       class="btn {% if log_type == 'system' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        系统日志
+                    </a>
+                    <a href="{{ url_for('admin.logs', type='access', search=search, date_start=date_start, date_end=date_end) }}"
+                       class="btn {% if log_type == 'access' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        访问日志
+                    </a>
+                    <a href="{{ url_for('admin.logs', type='error', search=search, date_start=date_start, date_end=date_end) }}"
+                       class="btn {% if log_type == 'error' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        错误日志
+                    </a>
+                </div>
+
+                <input type="hidden" name="type" value="{{ log_type }}">
+
+                <input type="date" name="date_start" class="form-control form-control-sm"
+                       style="width: 140px;" value="{{ date_start }}" placeholder="开始日期">
+                <input type="date" name="date_end" class="form-control form-control-sm"
+                       style="width: 140px;" value="{{ date_end }}" placeholder="结束日期">
+
+                <input type="text" name="search" class="form-control form-control-sm"
+                       style="width: 200px;" placeholder="关键词搜索..." value="{{ search }}">
+
+                <select name="max_lines" class="form-select form-select-sm" style="width: 100px;">
+                    <option value="500" {% if max_lines == 500 %}selected{% endif %}>500行</option>
+                    <option value="2000" {% if max_lines == 2000 %}selected{% endif %}>2000行</option>
+                    <option value="5000" {% if max_lines == 5000 %}selected{% endif %}>5000行</option>
+                    <option value="10000" {% if max_lines == 10000 %}selected{% endif %}>10000行</option>
+                </select>
+
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-search"></i> 筛选
+                </button>
+                {% if search or date_start or date_end %}
+                <a href="{{ url_for('admin.logs', type=log_type) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x"></i> 重置
+                </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    {% if line_count > 0 %}
+    <div class="alert alert-info py-2 mb-3 d-flex justify-content-between align-items-center">
+        <span>共 <strong>{{ line_count }}</strong> 条日志记录（最新在前）</span>
+        {% if files %}
+        <div>
+            {% for f in files %}
+            <a href="{{ url_for('admin.logs_download', file=f.basename) }}"
+               class="btn btn-sm btn-outline-primary me-1" title="{{ f.basename }}">
+                <i class="bi bi-download"></i> {{ f.basename }}
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <textarea class="form-control font-monospace" rows="25" readonly
+              style="font-size: 12px; background: #1e1e1e; color: #d4d4d4; border: none; white-space: pre; overflow-x: auto;">{{ log_text }}</textarea>
+
+    {% if not log_text %}
+    <div class="text-center text-muted py-4">
+        <i class="bi bi-journal-x display-4"></i>
+        <p class="mt-2">暂无日志记录</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+{{ super() }}
+<style>
+    textarea.font-monospace {
+        font-family: 'Consolas', 'Courier New', monospace;
+    }
+</style>
+{% endblock %}

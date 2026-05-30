@@ -1,0 +1,75 @@
+{% extends "admin/base.html" %}
+
+{% block title %}公告已读详情 - Study Clash{% endblock %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="bi bi-megaphone"></i> 已读详情 - {{ announcement.title }}</h5>
+    <a href="{{ url_for('admin.announcements') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> 返回公告列表
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm text-center">
+            <div class="card-body">
+                <h6 class="text-muted">已读人数</h6>
+                <span class="display-6 fw-bold text-success">{{ read_count }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm text-center">
+            <div class="card-body">
+                <h6 class="text-muted">活跃用户总数</h6>
+                <span class="display-6 fw-bold text-primary">{{ total_users }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm text-center">
+            <div class="card-body">
+                <h6 class="text-muted">已读率</h6>
+                <span class="display-6 fw-bold {% if read_rate >= 80 %}text-success{% elif read_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">{{ read_rate }}%</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-people"></i> 已读用户列表</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>用户名</th>
+                        <th>昵称</th>
+                        <th>阅读时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for detail in read_details %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ detail.username }}</td>
+                        <td>{{ detail.nickname }}</td>
+                        <td>{{ detail.read_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-3">暂无已读记录</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

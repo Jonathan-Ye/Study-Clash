@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}每日复习计划 - Study Clash{% endblock %}
+
+{% block extra_css %}
+<style>
+.plan-chapter-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem; background: white; border-radius: var(--radius);
+    margin-bottom: 0.5rem; box-shadow: var(--shadow-sm);
+    transition: all var(--transition);
+}
+.plan-chapter-row:hover { box-shadow: var(--shadow); transform: translateX(4px); }
+.streak-card {
+    background: var(--gradient-primary); border-radius: var(--radius-lg);
+    padding: 1.5rem; color: white; text-align: center;
+    box-shadow: var(--shadow-md);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1">📅 每日复习计划</h3>
+            <p class="text-muted mb-0">基于遗忘曲线智能推荐今日复习内容</p>
+        </div>
+        <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回仪表盘
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-4">
+            <!-- 打卡信息 -->
+            <div class="streak-card mb-4">
+                <div style="font-size:3rem;">🔥</div>
+                <div style="font-size:2.5rem;font-weight:800;">{{ streak_info.streak_days }}</div>
+                <div style="opacity:0.9;">连续复习天数</div>
+                <div class="mt-2" style="background:rgba(255,255,255,0.2);border-radius:var(--radius);padding:0.5rem;">
+                    {% if streak_info.today_checked %}
+                    ✅ 今日已打卡
+                    {% else %}
+                    ⏳ 今日未打卡
+                    {% endif %}
+                </div>
+                <div style="font-size:0.85rem;opacity:0.8;margin-top:0.5rem;">{{ streak_info.motivation }}</div>
+            </div>
+
+            <!-- 今日总览 -->
+            <div class="card shadow-sm" style="border-radius:var(--radius-lg);">
+                <div class="card-body">
+                    <h6 class="text-primary"><i class="bi bi-calendar-check"></i> 今日总览</h6>
+                    <div class="d-flex justify-content-between align-items-center my-2">
+                        <span>待复习题目</span>
+                        <span class="badge bg-primary fs-6">{{ plan_data.total }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center my-2">
+                        <span>涉及章节</span>
+                        <span class="badge bg-info">{{ plan_data.chapters|length }}</span>
+                    </div>
+                    {% if plan_data.total > 0 %}
+                    <a href="{{ url_for('wrong.review', mode='spaced') }}" class="btn btn-primary w-100 mt-2">
+                        <i class="bi bi-play-circle"></i> 开始今日复习
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <h5 class="mb-3"><i class="bi bi-list-check"></i> 按章节安排</h5>
+            {% if plan_data.chapters %}
+            {% for ch in plan_data.chapters %}
+            <div class="plan-chapter-row">
+                <div>
+                    <div class="fw-medium">{{ ch.chapter_name }}</div>
+                    <small class="text-muted">{{ ch.subject_name }}</small>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-primary">{{ ch.count }} 题</span>
+                    <a href="{{ url_for('wrong.review', chapter_id=ch.chapter_id) }}" class="btn btn-sm btn-outline-primary">
+                        复习
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="text-center py-5">
+                <div style="font-size:3rem;">🎉</div>
+                <p class="text-muted mt-2">今日无待复习题目，太棒了！</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

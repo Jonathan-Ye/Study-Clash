@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}导入题目 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-upload"></i> 导入题目</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">选择文件</label>
+                        <input type="file" class="form-control" name="file" accept=".xlsx,.xls,.csv,.json" required>
+                        <div class="form-text">支持格式：Excel (.xlsx, .xls)、CSV、JSON</div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">学科（可选）</label>
+                            <select class="form-select" name="subject_id">
+                                <option value="">不指定</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">章节（可选）</label>
+                            <select class="form-select" name="chapter_id">
+                                <option value="">不指定</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-upload"></i> 开始导入
+                    </button>
+                </form>
+                
+                <hr>
+                
+                <h5>文件格式说明</h5>
+                <p class="text-muted">Excel/CSV 文件需包含以下列：</p>
+                <ul class="text-muted">
+                    <li><strong>题目内容</strong>（必填）</li>
+                    <li><strong>题型</strong>（必填）：单选/多选/判断</li>
+                    <li><strong>正确答案</strong>（必填）：如 A 或 A,B,C</li>
+                    <li>选项A、选项B、选项C、选项D（选填）</li>
+                    <li>难度（选填）：1-4</li>
+                    <li>解析（选填）</li>
+                    <li><strong>学科</strong>（选填）：从下拉列表选择或手动输入</li>
+                    <li><strong>章节</strong>（选填）：从下拉列表选择或手动输入，格式为"章 > 节 > 小节"</li>
+                </ul>
+                
+                <a href="{{ url_for('questions.download_template') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-download"></i> 下载Excel模板（含学科/章节下拉选择）
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector('select[name="subject_id"]').addEventListener('change', function() {
+    const subjectId = this.value;
+    const chapterSelect = document.querySelector('select[name="chapter_id"]');
+    
+    chapterSelect.innerHTML = '<option value="">不指定</option>';
+    
+    if (subjectId) {
+        fetch('/questions/api/chapters/' + subjectId)
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(chapter => {
+                    const option = document.createElement('option');
+                    option.value = chapter.id;
+                    option.textContent = chapter.name;
+                    chapterSelect.appendChild(option);
+                });
+            });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}游戏结果 - Study Clash{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white text-center">
+                <h4 class="mb-0"><i class="bi bi-trophy"></i> 游戏结束</h4>
+            </div>
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <h3>恭喜完成游戏！</h3>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>排名</th>
+                                <th>玩家</th>
+                                <th>得分</th>
+                                <th>正确</th>
+                                <th>用时</th>
+                                <th>获得积分</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in records %}
+                            <tr class="{% if record.user_id == current_user.id %}table-primary{% endif %}">
+                                <td>
+                                    {% if record.rank == 1 %}
+                                    <span class="badge bg-warning fs-6"><i class="bi bi-trophy-fill"></i> 1</span>
+                                    {% elif record.rank == 2 %}
+                                    <span class="badge bg-secondary fs-6">2</span>
+                                    {% elif record.rank == 3 %}
+                                    <span class="badge bg-danger fs-6">3</span>
+                                    {% else %}
+                                    <span class="text-muted">{{ record.rank }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ record.user.nickname or record.user.username }}</td>
+                                <td><strong>{{ record.score }}</strong></td>
+                                <td>{{ record.correct_count }}/{{ record.correct_count + record.wrong_count }}</td>
+                                <td>{{ record.total_time }}秒</td>
+                                <td class="text-success">+{{ record.points_earned }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-4">
+                    <a href="{{ url_for('game.index') }}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left"></i> 返回
+                    </a>
+                    <a href="{{ url_for('wrong.dashboard') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-journal-x"></i> 查看错题
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

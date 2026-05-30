@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="kingGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6666;stop-opacity:1" />
+      <stop offset="35%" style="stop-color:#FF0000;stop-opacity:1" />
+      <stop offset="65%" style="stop-color:#CC0000;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#990000;stop-opacity:1" />
+    </linearGradient>
+    <filter id="kingGlow2">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <path d="M32,5 L36,18 L50,16 L40,26 L44,40 L32,33 L20,40 L24,26 L14,16 L28,18 Z" fill="url(#kingGrad2)" stroke="#800000" stroke-width="2" filter="url(#kingGlow2)"/>
+  <path d="M22,28 L32,21 L42,28 L38,38 L26,38 Z" fill="#FFD700" opacity="0.8"/>
+  <circle cx="32" cy="30" r="4" fill="#FFF"/>
+  <text x="32" y="56" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#FFF" text-anchor="middle">II</text>
+</svg>

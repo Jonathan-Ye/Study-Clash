@@ -1,0 +1,102 @@
+<!-- 题目反馈模态框 -->
+<div class="modal fade" id="questionFeedbackModal" tabindex="-1" aria-labelledby="questionFeedbackModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="questionFeedbackModalLabel">
+                    <i class="bi bi-flag-fill text-danger"></i> 题目反馈
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="feedbackForm">
+                    <input type="hidden" id="feedback_question_id" name="question_id" value="">
+                    
+                    <div class="mb-3">
+                        <label for="feedback_type" class="form-label">反馈类型 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="feedback_type" name="feedback_type" required>
+                            <option value="">请选择反馈类型</option>
+                            <option value="error">题目错误</option>
+                            <option value="answer_error">答案错误</option>
+                            <option value="analysis_error">解析错误</option>
+                            <option value="suggestion">改进建议</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="feedback_content" class="form-label">反馈内容 <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="feedback_content" name="content" rows="4" 
+                                  placeholder="请详细描述您发现的问题或建议..." required></textarea>
+                    </div>
+                    
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle"></i> 
+                        <small>感谢您的反馈！如果反馈被采纳，您将获得积分奖励。</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="submitFeedbackBtn" onclick="submitFeedback()">
+                    <i class="bi bi-send-fill"></i> 提交反馈
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 反馈提交JavaScript -->
+<script>
+function openFeedbackModal(questionId) {
+    document.getElementById('feedback_question_id').value = questionId;
+    document.getElementById('feedbackForm').reset();
+    const modal = new bootstrap.Modal(document.getElementById('questionFeedbackModal'));
+    modal.show();
+}
+
+function submitFeedback() {
+    const questionId = document.getElementById('feedback_question_id').value;
+    const feedbackType = document.getElementById('feedback_type').value;
+    const content = document.getElementById('feedback_content').value;
+    
+    if (!feedbackType || !content) {
+        alert('请填写完整的反馈信息');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>提交中...';
+    
+    fetch('/api/feedback/submit', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            question_id: parseInt(questionId),
+            feedback_type: feedbackType,
+            content: content
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('反馈提交成功！感谢您的宝贵意见。');
+            bootstrap.Modal.getInstance(document.getElementById('questionFeedbackModal')).hide();
+        } else {
+            alert(data.message || '提交失败，请稍后重试');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('提交失败，请稍后重试');
+    })
+    .finally(() => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-send-fill"></i> 提交反馈';
+    });
+}
+</script>

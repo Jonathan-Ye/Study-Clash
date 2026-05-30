@@ -1,0 +1,149 @@
+{% extends "admin/base.html" %}
+
+{% block admin_content %}
+{% include 'admin/_flash_messages.html' %}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-funnel"></i> 筛选条件</h6>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">开始日期</label>
+                <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date or '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">结束日期</label>
+                <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date or '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">操作人</label>
+                <input type="text" name="admin_name" class="form-control form-control-sm" value="{{ admin_name or '' }}" placeholder="用户名">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label form-label-sm">操作类型</label>
+                <select name="action_type" class="form-select form-select-sm">
+                    <option value="">全部</option>
+                    {% for value, label in action_types %}
+                    <option value="{{ value }}" {% if action_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label form-label-sm">对象类型</label>
+                <select name="target_type" class="form-select form-select-sm">
+                    <option value="">全部</option>
+                    {% for value, label in target_types %}
+                    <option value="{{ value }}" {% if target_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label form-label-sm">结果</label>
+                <select name="result" class="form-select form-select-sm">
+                    <option value="">全部</option>
+                    {% for value, label in result_options %}
+                    <option value="{{ value }}" {% if result == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 查询</button>
+                <a href="{{ url_for('admin.op_logs') }}" class="btn btn-outline-secondary btn-sm">重置</a>
+                <a href="{{ url_for('admin.export_op_logs', start_date=start_date or '', end_date=end_date or '', admin_name=admin_name or '', action_type=action_type or '', target_type=target_type or '', result=result or '') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-download"></i> 导出</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> 操作日志</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>时间</th>
+                        <th>操作人</th>
+                        <th>操作类型</th>
+                        <th>对象类型</th>
+                        <th>对象</th>
+                        <th>结果</th>
+                        <th>IP地址</th>
+                        <th>详情</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in pagination.items %}
+                    <tr>
+                        <td class="text-nowrap">{{ log.created_at.strftime('%m-%d %H:%M:%S') }}</td>
+                        <td>{{ log.admin_name }}</td>
+                        <td>
+                            {% if log.action_type == 'create' %}
+                            <span class="badge bg-success">创建</span>
+                            {% elif log.action_type == 'update' %}
+                            <span class="badge bg-primary">编辑</span>
+                            {% elif log.action_type == 'delete' %}
+                            <span class="badge bg-danger">删除</span>
+                            {% elif log.action_type == 'export' %}
+                            <span class="badge bg-info">导出</span>
+                            {% elif log.action_type == 'import' %}
+                            <span class="badge bg-info">导入</span>
+                            {% elif log.action_type == 'config_change' %}
+                            <span class="badge bg-warning text-dark">配置变更</span>
+                            {% elif log.action_type == 'batch_operation' %}
+                            <span class="badge bg-secondary">批量操作</span>
+                            {% else %}
+                            <span class="badge bg-light text-dark">{{ log.action_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ log.target_type }}</td>
+                        <td>
+                            {% if log.target_id %}#{{ log.target_id }}{% endif %}
+                            {% if log.target_name %}{{ log.target_name[:30] }}{% endif %}
+                        </td>
+                        <td>
+                            {% if log.result == 'success' %}
+                            <span class="text-success"><i class="bi bi-check-circle"></i></span>
+                            {% else %}
+                            <span class="text-danger"><i class="bi bi-x-circle"></i></span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ log.ip_address or '-' }}</td>
+                        <td class="text-muted small" title="{{ log.detail or '' }}">{{ (log.detail or '-')[:40] }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-3">暂无操作日志</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if pagination.pages > 1 %}
+    <div class="card-footer bg-light">
+        <nav class="d-flex justify-content-center">
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin.op_logs', page=pagination.prev_num, start_date=start_date, end_date=end_date, admin_name=admin_name, action_type=action_type, target_type=target_type, result=result) if pagination.has_prev else '#' }}">&laquo;</a>
+                </li>
+                {% for p in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+                    {% if p %}
+                    <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin.op_logs', page=p, start_date=start_date, end_date=end_date, admin_name=admin_name, action_type=action_type, target_type=target_type, result=result) }}">{{ p }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin.op_logs', page=pagination.next_num, start_date=start_date, end_date=end_date, admin_name=admin_name, action_type=action_type, target_type=target_type, result=result) if pagination.has_next else '#' }}">&raquo;</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

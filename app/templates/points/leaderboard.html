@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}排行榜 - Study Clash{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tier.css') }}">
+<style>
+.tier-mini-card {
+    border: 1px solid #dee2e6;
+    transition: all 0.2s;
+}
+.tier-mini-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.tier-mini-card.active {
+    background: rgba(13, 110, 253, 0.1) !important;
+    border-color: #0d6efd !important;
+}
+.tier-progress-bar {
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h3 class="mb-4"><i class="bi bi-trophy"></i> 积分排行榜</h3>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs mb-2">
+                    <li class="nav-item">
+                        <a class="nav-link {% if period == 'all_time' %}active{% endif %}" 
+                           href="{{ url_for('points.leaderboard', period='all_time', category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=class_name) }}">总榜</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if period == 'monthly' %}active{% endif %}" 
+                           href="{{ url_for('points.leaderboard', period='monthly', category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=class_name) }}">月榜</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if period == 'weekly' %}active{% endif %}" 
+                           href="{{ url_for('points.leaderboard', period='weekly', category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=class_name) }}">周榜</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if period == 'daily' %}active{% endif %}" 
+                           href="{{ url_for('points.leaderboard', period='daily', category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=class_name) }}">日榜</a>
+                    </li>
+                </ul>
+                
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <select class="form-select form-select-sm" style="width: auto;" onchange="handleFilterChange(this)">
+                        <option value="{{ url_for('points.leaderboard', period=period, category=category, subject_id=subject_id, game_type=game_type, school='', grade=grade, class_name=class_name) }}" {% if not school %}selected{% endif %}>全部学校</option>
+                        {% for s in schools %}
+                        <option value="{{ url_for('points.leaderboard', period=period, category=category, subject_id=subject_id, game_type=game_type, school=s, grade=grade, class_name=class_name) }}" {% if school == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <select class="form-select form-select-sm" style="width: auto;" onchange="handleFilterChange(this)">
+                        <option value="{{ url_for('points.leaderboard', period=period, category=category, subject_id=subject_id, game_type=game_type, school=school, grade='', class_name=class_name) }}" {% if not grade %}selected{% endif %}>全部年级</option>
+                        {% for g in grades %}
+                        <option value="{{ url_for('points.leaderboard', period=period, category=category, subject_id=subject_id, game_type=game_type, school=school, grade=g, class_name=class_name) }}" {% if grade == g %}selected{% endif %}>{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <select class="form-select form-select-sm" style="width: auto;" onchange="handleFilterChange(this)">
+                        <option value="{{ url_for('points.leaderboard', period=period, category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name='') }}" {% if not class_name %}selected{% endif %}>全部班级</option>
+                        {% for c in classes %}
+                        <option value="{{ url_for('points.leaderboard', period=period, category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=c) }}" {% if class_name == c %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    {% if current_user.role == 'admin' %}
+                    <a href="{{ url_for('admin.export_leaderboard', period=period, category=category) }}" class="btn btn-sm btn-success">
+                        <i class="bi bi-download"></i> 导出表格
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" style="table-layout: fixed;">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="70">排名</th>
+                                <th>用户</th>
+                                <th width="120">段位</th>
+                                <th width="90">积分</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in entries %}
+                            <tr class="{% if entry.user.id == current_user.id %}table-primary{% endif %}">
+                                <td>
+                                    {% if entry.rank == 1 %}
+                                    <div class="text-center">
+                                        <i class="bi bi-trophy-fill text-warning fs-3"></i>
+                                        <div class="fw-bold text-warning">1</div>
+                                    </div>
+                                    {% elif entry.rank == 2 %}
+                                    <div class="text-center">
+                                        <i class="bi bi-trophy-fill text-secondary fs-3"></i>
+                                        <div class="fw-bold text-secondary">2</div>
+                                    </div>
+                                    {% elif entry.rank == 3 %}
+                                    <div class="text-center">
+                                        <i class="bi bi-trophy-fill text-danger fs-3"></i>
+                                        <div class="fw-bold text-danger">3</div>
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">{{ entry.rank }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <a href="{{ url_for('main.profile', user_id=entry.user.id) }}" class="text-decoration-none">
+                                            <img src="{{ entry.user.get_avatar_url() }}"
+                                                 class="rounded-circle me-2" width="40" height="40">
+                                        </a>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-center">
+                                                <a href="{{ url_for('main.profile', user_id=entry.user.id) }}" class="fw-bold text-decoration-none text-dark">
+                                                    {{ entry.user.nickname or entry.user.username }}
+                                                </a>
+                                                {% if entry.rank <= 3 %}
+                                                <span class="ms-2">
+                                                    {% if entry.rank == 1 %}
+                                                    <span class="badge bg-warning">冠军</span>
+                                                    {% elif entry.rank == 2 %}
+                                                    <span class="badge bg-secondary">亚军</span>
+                                                    {% elif entry.rank == 3 %}
+                                                    <span class="badge bg-danger">季军</span>
+                                                    {% endif %}
+                                                </span>
+                                                {% endif %}
+                                            </div>
+                                            <small class="text-muted">
+                                                {{ entry.user.school or '' }} 
+                                                {% if entry.user.grade %}{{ entry.user.grade }}{% endif %} 
+                                                {% if entry.user.class_name %}{{ entry.user.class_name }}{% endif %}
+                                            </small>
+                                            {% if entry.user.last_login %}
+                                            <div class="small text-muted">
+                                                最近活跃: {{ entry.user.last_login | to_beijing | strftime('%Y-%m-%d %H:%M') }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if entry.user.current_tier %}
+                                    <div style="display: inline-flex; flex-direction: column; gap: 2px;">
+                                        <span class="tier-badge-small" style="background-color: {{ entry.user.current_tier.color }};">
+                                            {% if entry.user.current_tier.icon %}
+                                            <img src="/static/images/tiers/{{ entry.user.current_tier.icon }}" 
+                                                 alt="{{ entry.user.current_tier.display_name }}"
+                                                 style="width: 16px; height: 16px;">
+                                            {% endif %}
+                                            <span>{{ entry.user.current_tier.display_name }}</span>
+                                        </span>
+                                        {% if entry.user.current_tier.max_points and entry.score < entry.user.current_tier.max_points %}
+                                        <div class="tier-progress-bar bg-light mt-1">
+                                            <div class="progress-bar progress-bar-striped" 
+                                                 role="progressbar"
+                                                 style="width: {{ ((entry.score - entry.user.current_tier.min_points) / (entry.user.current_tier.max_points - entry.user.current_tier.min_points) * 100)|round }}%; background-color: {{ entry.user.current_tier.color }}">
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <span class="badge bg-secondary" style="font-size: 11px;">未定段</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="fw-bold text-primary">{{ entry.score }}</span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">暂无数据</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        {% if pagination.pages > 1 %}
+        <nav class="mb-4">
+            <ul class="pagination justify-content-center">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('points.leaderboard', page=pagination.prev_num, period=period, category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=class_name) }}">上一页</a>
+                </li>
+                {% endif %}
+                
+                {% for p in pagination.iter_pages() %}
+                    {% if p %}
+                        {% if p == pagination.page %}
+                        <li class="page-item active">
+                            <a class="page-link" href="#">{{ p }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('points.leaderboard', page=p, period=period, category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=class_name) }}">{{ p }}</a>
+                        </li>
+                        {% endif %}
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if pagination.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('points.leaderboard', page=pagination.next_num, period=period, category=category, subject_id=subject_id, game_type=game_type, school=school, grade=grade, class_name=class_name) }}">下一页</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- 我的排名 - 增强版 -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-person-circle"></i> 我的排名 & 段位</h5>
+            </div>
+            <div class="card-body text-center">
+                {% if my_rank %}
+                <h2 class="text-primary display-4">{{ my_rank }}</h2>
+                {% else %}
+                <h2 class="text-muted display-4">-</h2>
+                {% endif %}
+                <p class="text-muted">当前排名</p>
+                
+                <!-- 段位卡片 -->
+                {% if current_user.current_tier %}
+                <div class="mt-3 p-3 rounded" style="background: linear-gradient(135deg, {{ current_user.current_tier.color }}22, {{ current_user.current_tier.color }}44); border: 1px solid {{ current_user.current_tier.color }}66;">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        {% if current_user.current_tier.icon %}
+                        <img src="/static/images/tiers/{{ current_user.current_tier.icon }}" 
+                             alt="{{ current_user.current_tier.display_name }}"
+                             style="width: 40px; height: 40px;" class="me-2">
+                        {% endif %}
+                        <div class="text-start">
+                            <div class="fw-bold" style="color: {{ current_user.current_tier.color }}; font-size: 18px;">{{ current_user.current_tier.display_name }}</div>
+                            <small class="text-muted">{{ current_user.current_tier.tier_name }}</small>
+                        </div>
+                    </div>
+                    
+                    <!-- 进度条 -->
+                    {% if current_user.current_tier.max_points %}
+                    {% set progress = ((current_user.total_points - current_user.current_tier.min_points) / (current_user.current_tier.max_points - current_user.current_tier.min_points) * 100)|round(1) %}
+                    {% set points_needed = current_user.current_tier.max_points - current_user.total_points %}
+                    <div class="progress tier-progress-bar mb-2" style="height: 10px;">
+                        <div class="progress-bar progress-bar-animated" 
+                             role="progressbar"
+                             style="width: {{ progress }}%; background-color: {{ current_user.current_tier.color }}">
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        当前: {{ current_user.total_points }} 分 | 
+                        升级还需: <strong>{{ points_needed|abs }}</strong> 分
+                    </small>
+                    {% else %}
+                    <small class="text-success fw-bold">🌟 已达最高段位！</small>
+                    {% endif %}
+                    
+                    <!-- 历史最高 -->
+                    {% if current_user.peak_tier and current_user.peak_tier.id != current_user.current_tier.id %}
+                    <hr class="my-2">
+                    <small class="text-muted">
+                        历史最高: <span style="color: {{ current_user.peak_tier.color }};">{{ current_user.peak_tier.display_name }}</span>
+                    </small>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="alert alert-light py-2">
+                    <small class="text-muted">暂无段位信息</small>
+                </div>
+                {% endif %}
+                
+                <hr>
+                <div class="d-flex justify-content-around text-center">
+                    <div>
+                        <h5 class="text-warning mb-0">{{ current_user.total_points }}</h5>
+                        <small class="text-muted">总积分</small>
+                    </div>
+                    <div>
+                        <h5 class="text-info mb-0">{{ current_user.streak_days }}</h5>
+                        <small class="text-muted">连续天数</small>
+                    </div>
+                </div>
+                
+                <div class="mt-3 d-flex gap-2 justify-content-center">
+                    <a href="{{ url_for('points.my_points') }}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-star"></i> 积分详情
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 段位图鉴 -->
+        <div class="card mb-4">
+            <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h5 class="mb-0"><i class="bi bi-award"></i> 段位图鉴</h5>
+            </div>
+            <div class="card-body p-3">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle"></i> 根据总积分自动划分，积分变化实时更新段位
+                </p>
+                
+                <div id="tierListContainer">
+                    {% for tier_name, tiers in tier_groups.items() %}
+                    <div class="tier-group mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                        <div class="d-flex align-items-center mb-2">
+                            {% if tiers[0].icon %}
+                            <img src="/static/images/tiers/{{ tiers[0].icon }}" 
+                                 alt="{{ tier_name }}" 
+                                 style="width: 24px; height: 24px;" 
+                                 class="me-2">
+                            {% endif %}
+                            <strong style="color: {{ tiers[0].color }};">{{ tier_name }}</strong>
+                            <span class="badge ms-auto bg-light text-dark" style="font-size: 10px;">{{ tiers|length }}级</span>
+                        </div>
+                        <div class="row g-1">
+                            {% for sub_tier in tiers|sort(attribute='sub_tier', reverse=true) %}
+                            <div class="col-4">
+                                <div class="tier-mini-card p-2 rounded text-center {% if current_user.current_tier and current_user.current_tier.id == sub_tier.id %}active{% endif %}"
+                                     style="font-size: 11px; cursor: default;"
+                                     title="{{ sub_tier.display_name }}: {{ sub_tier.min_points }}-{{ sub_tier.max_points or '∞' }}分">
+                                    <div class="fw-bold" style="color: {{ sub_tier.color }};">{{ sub_tier.sub_tier }}</div>
+                                    <div class="text-muted">{{ sub_tier.min_points }}+</div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="toggleTierRules()">
+                    <i class="bi bi-question-circle"></i> 段位规则说明
+                </button>
+                
+                <div id="tierRulesPanel" class="mt-3 d-none">
+                    <div class="alert alert-info mb-0 p-3" style="font-size: 12px;">
+                        <h6 class="mb-2"><i class="bi bi-lightning-fill text-warning"></i> 段位晋升原理</h6>
+                        <ol class="mb-2 ps-3">
+                            <li><strong>实时计算：</strong>系统根据你的<strong>总积分</strong>实时计算当前段位</li>
+                            <li><strong>升降机制：</strong>积分增加会升段，积分减少会降段（动态调整）</li>
+                            <li><strong>历史最高：</strong>记录你达到过的最高段位（只升不降）</li>
+                            <li><strong>子段位：</strong>每个大段位分为 I/II/III 三档，I 为最高级</li>
+                        </ol>
+                        
+                        <h6 class="mb-2 mt-3"><i class="bi bi-trophy-fill text-warning"></i> 获取积分方式</h6>
+                        <ul class="mb-0 ps-3">
+                            <li>单人答题正确: 每题 +1分</li>
+                            <li>双人对战胜利: +10分</li>
+                            <li>四人挑战冠军: +30分 / 亚军: +20分 / 季军: +10分</li>
+                            <li>错题复习正确: 每题 +1分</li>
+                            <li>每日登录: +5分</li>
+                        </ul>
+                        
+                        <h6 class="mb-2 mt-3"><i class="bi bi-star-fill text-warning"></i> 段位列表（从低到高）</h6>
+                        <div class="table-responsive" style="font-size: 11px;">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>段位</th>
+                                        <th>积分范围</th>
+                                        <th>特点</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>青铜 III-I</td><td>0-199</td><td>入门阶段</td></tr>
+                                    <tr><td>白银 III-I</td><td>200-499</td><td>初级阶段</td></tr>
+                                    <tr><td>黄金 III-I</td><td>500-999</td><td>中级阶段</td></tr>
+                                    <tr><td>铂金 III-I</td><td>1000-1999</td><td>高级阶段</td></tr>
+                                    <tr><td>钻石 III-I</td><td>2000-3999</td><td>专家阶段</td></tr>
+                                    <tr><td>大师 III-I</td><td>4000-5999</td><td>精英阶段</td></tr>
+                                    <tr><td>王者 III-I</td><td>6000-9999</td><td>顶尖阶段</td></tr>
+                                    <tr><td>传奇 I</td><td>10000+</td><td>巅峰阶段</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 积分规则 -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> 积分规则</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 单人答题正确: 每题+1分</li>
+                    <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 双人对战胜利: +10分</li>
+                    <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 四人挑战冠军: +30分</li>
+                    <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 四人挑战亚军: +20分</li>
+                    <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 四人挑战季军: +10分</li>
+                    <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 错题复习正确: 每题+1分</li>
+                    <li class="mb-2"><i class="bi bi-check-circle text-success"></i> 每日登录: +5分</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function handleFilterChange(selectElement) {
+    const url = selectElement.value;
+    // 使用 location.replace 而不是 location.href，避免浏览器缓存
+    // 并添加时间戳参数强制刷新
+    const separator = url.includes('?') ? '&' : '?';
+    const urlWithTimestamp = url + separator + '_t=' + Date.now();
+    window.location.replace(urlWithTimestamp);
+}
+
+function toggleTierRules() {
+    const panel = document.getElementById('tierRulesPanel');
+    panel.classList.toggle('d-none');
+}
+</script>
+{% endblock %}

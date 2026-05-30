@@ -1,0 +1,494 @@
+{% extends "admin/base.html" %}
+
+{% block title %}积分审计 - Study Clash{% endblock %}
+
+{% block admin_content %}
+<div class="container-fluid py-4">
+    <!-- 顶部操作栏 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-cash-stack"></i> 积分审计</h4>
+        <a href="{{ url_for('admin.export_points_audit', user_id=user_id, start_date=start_date, end_date=end_date, reason=reason_filter) }}" class="btn btn-outline-success">
+            <i class="bi bi-download me-1"></i>导出Excel
+        </a>
+    </div>
+
+    <!-- 筛选表单 -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <input type="text" class="form-control" id="userSearchDisplay" 
+                           placeholder="搜索或选择用户" autocomplete="off" readonly>
+                    <input type="hidden" name="user_id" id="userSearchHidden" value="{{ user_id or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <input type="date" class="form-control" name="start_date" value="{{ start_date or '' }}" placeholder="开始日期">
+                </div>
+                <div class="col-md-2">
+                    <input type="date" class="form-control" name="end_date" value="{{ end_date or '' }}" placeholder="结束日期">
+                </div>
+                <div class="col-md-3">
+                    <select name="reason" class="form-select">
+                        <option value="">全部类型</option>
+                        {% for key, label in reason_options %}
+                        <option value="{{ key }}" {{ 'selected' if reason_filter == key }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search me-1"></i>筛选
+                    </button>
+                    {% if has_filters %}
+                    <a href="{{ url_for('admin.points_audit') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-lg me-1"></i>重置
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-start border-4 border-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small text-uppercase fw-bold">总发放积分</div>
+                            <div class="fs-3 fw-bold text-success mt-1">+{{ total_issued }}</div>
+                        </div>
+                        <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                            <i class="bi bi-arrow-up-circle fs-4 text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-start border-4 border-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small text-uppercase fw-bold">总扣除积分</div>
+                            <div class="fs-3 fw-bold text-danger mt-1">-{{ total_deducted }}</div>
+                        </div>
+                        <div class="bg-danger bg-opacity-10 rounded-circle p-3">
+                            <i class="bi bi-arrow-down-circle fs-4 text-danger"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-start border-4 border-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small text-uppercase fw-bold">净积分变化</div>
+                            <div class="fs-3 fw-bold text-primary mt-1">{{ '+%d'|format(net_change) if net_change > 0 else net_change }}</div>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                            <i class="bi bi-graph-up fs-4 text-primary"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-start border-4 border-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small text-uppercase fw-bold">记录数 / 活跃用户</div>
+                            <div class="fs-3 fw-bold text-info mt-1">{{ record_count }} <span class="fs-6 text-muted">/ {{ active_users_count }}人</span></div>
+                        </div>
+                        <div class="bg-info bg-opacity-10 rounded-circle p-3">
+                            <i class="bi bi-people fs-4 text-info"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if trend_list %}
+    <!-- 趋势图表 -->
+    <div class="card mb-4">
+        <div class="card-header bg-white py-3">
+            <h6 class="mb-0"><i class="bi bi-bar-chart-line"></i> 积分趋势</h6>
+        </div>
+        <div class="card-body">
+            <canvas id="trendChart" height="80"></canvas>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 原因分布 + 用户排行 -->
+    <div class="row g-3 mb-4">
+        {% if reason_list %}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0"><i class="bi bi-pie-chart"></i> 积分来源分布</h6>
+                </div>
+                <div class="card-body">
+                    {% for item in reason_list %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-semibold">{{ item.key|get_reason_label }}</span>
+                            <span class="text-muted small">{{ item.count }}次 / {{ '+' if item.points > 0 else '' }}{{ item.points }}分</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar {% if item.points >= 0 %}bg-success{% else %}bg-danger{% endif %}" 
+                                 style="width: {{ (item.count / record_count * 100) | int if record_count > 0 else 0 }}%" 
+                                 title="{{ (item.count / record_count * 100) | round(1) }}%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if top_list %}
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0"><i class="bi bi-trophy"></i> 积分排行 TOP 10</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="50">#</th>
+                                    <th>用户</th>
+                                    <th width="80" class="text-center">次数</th>
+                                    <th width="100" class="text-end">总积分</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in top_list %}
+                                <tr>
+                                    <td>
+                                        {% if loop.index == 1 %}
+                                        <span class="badge bg-warning text-dark">🥇</span>
+                                        {% elif loop.index == 2 %}
+                                        <span class="badge bg-secondary">🥈</span>
+                                        {% elif loop.index == 3 %}
+                                        <span class="badge bg-danger">🥉</span>
+                                        {% else %}
+                                        <span class="text-muted">{{ loop.index }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('admin.points_audit', user_id=user.id) }}" class="text-decoration-none">
+                                            {{ user.name }}
+                                        </a>
+                                    </td>
+                                    <td class="text-center">{{ user.count }}</td>
+                                    <td class="text-end">
+                                        {% if user.points > 0 %}
+                                        <span class="text-success fw-bold">+{{ user.points }}</span>
+                                        {% else %}
+                                        <span class="text-danger fw-bold">{{ user.points }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 明细记录 -->
+    <div class="card mb-4">
+        <div class="card-header bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-list-ul"></i> 积分明细</h6>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small">每页显示</span>
+                    <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;">
+                        {% for pp in [10, 20, 50, 100, 200] %}
+                        <option value="{{ pp }}" {{ 'selected' if pp == per_page }}>{{ pp }} 条</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="60">ID</th>
+                            <th>用户</th>
+                            <th width="100" class="text-center">积分变化</th>
+                            <th>原因</th>
+                            <th width="180">时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in pagination.items %}
+                        <tr>
+                            <td><span class="text-muted">{{ record.id }}</span></td>
+                            <td>
+                                <a href="{{ url_for('admin.points_audit', user_id=record.user_id) }}" class="text-decoration-none">
+                                    <strong>{{ record.user.nickname or record.user.username }}</strong>
+                                </a>
+                                <br>
+                                <small class="text-muted">@{{ record.user.username }}</small>
+                            </td>
+                            <td class="text-center">
+                                {% if record.points > 0 %}
+                                <span class="badge bg-success fs-6">+{{ record.points }}</span>
+                                {% else %}
+                                <span class="badge bg-danger fs-6">{{ record.points }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark">{{ record.reason|get_reason_label }}</span>
+                            </td>
+                            <td>
+                                <small>{{ record.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                <br>
+                                <small class="text-muted">{{ record.created_at.strftime('%H:%M:%S') }}</small>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                暂无积分记录
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分页 -->
+    {% if pagination.pages > 1 or per_page != 20 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if pagination.has_prev %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.points_audit', page=pagination.prev_num, per_page=per_page, user_id=user_id, start_date=start_date, end_date=end_date, reason=reason_filter) }}">上一页</a>
+            </li>
+            {% endif %}
+            {% for pg in pagination.iter_pages() %}
+                {% if pg %}
+                <li class="page-item {% if pg == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin.points_audit', page=pg, per_page=per_page, user_id=user_id, start_date=start_date, end_date=end_date, reason=reason_filter) }}">{{ pg }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{{ url_for('admin.points_audit', page=pagination.next_num, per_page=per_page, user_id=user_id, start_date=start_date, end_date=end_date, reason=reason_filter) }}">下一页</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+{% if trend_list %}
+<script>
+(function() {
+    var trendData = {{ trend_list | tojson }};
+    var labels = trendData.map(function(d) { return d.date; });
+    var issuedData = trendData.map(function(d) { return d.issued; });
+    var deductedData = trendData.map(function(d) { return d.deducted; });
+
+    var ctx = document.getElementById('trendChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '发放积分',
+                    data: issuedData,
+                    backgroundColor: 'rgba(22, 163, 74, 0.7)',
+                    borderColor: 'rgba(22, 163, 74, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: '扣除积分',
+                    data: deductedData,
+                    backgroundColor: 'rgba(220, 38, 38, 0.7)',
+                    borderColor: 'rgba(220, 38, 38, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    stacked: false,
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                    },
+                    ticks: {
+                        stepSize: 10
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+
+<script>
+// 用户搜索下拉框
+(function() {
+    var users = [
+        {% for user in users %}
+        {id: {{ user.id }}, name: '{{ (user.nickname or user.username)|replace("'", "\\'") }}'},
+        {% endfor %}
+    ];
+    var input = document.getElementById('userSearchDisplay');
+    var hidden = document.getElementById('userSearchHidden');
+    var selectedId = '{{ user_id or "" }}';
+    var dropdown = null;
+    var searchBox = null;
+    var listContainer = null;
+    var isOpen = false;
+
+    if (selectedId) {
+        var sel = users.find(function(u) { return u.id == selectedId; });
+        if (sel) input.value = sel.name;
+    }
+
+    function createDropdown() {
+        dropdown = document.createElement('div');
+        dropdown.id = 'userDropdown';
+        dropdown.style.cssText = 'position:fixed;z-index:99999;display:none;background:#fff;border:1px solid #dee2e6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);width:350px;max-height:300px;overflow:hidden;';
+
+        searchBox = document.createElement('input');
+        searchBox.type = 'text';
+        searchBox.className = 'form-control form-control-sm border-0 border-bottom rounded-0';
+        searchBox.placeholder = '输入关键词搜索...';
+        searchBox.style.cssText = 'padding:10px 12px;font-size:14px;';
+        dropdown.appendChild(searchBox);
+
+        listContainer = document.createElement('div');
+        listContainer.style.cssText = 'max-height:240px;overflow-y:auto;';
+        dropdown.appendChild(listContainer);
+
+        document.body.appendChild(dropdown);
+
+        searchBox.addEventListener('input', function() {
+            renderList(this.value);
+        });
+
+        searchBox.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeDropdown();
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                var first = listContainer.querySelector('[data-item]');
+                if (first) first.click();
+            }
+        });
+    }
+
+    function renderList(filter) {
+        listContainer.innerHTML = '';
+        var f = (filter || '').toLowerCase();
+        var filtered = users.filter(function(u) {
+            return !f || u.name.toLowerCase().indexOf(f) !== -1 || String(u.id).indexOf(f) !== -1;
+        });
+        if (filtered.length === 0) {
+            listContainer.innerHTML = '<div style="padding:12px;color:#999;font-size:13px;text-align:center;">无匹配用户</div>';
+            return;
+        }
+        filtered.slice(0, 50).forEach(function(u) {
+            var div = document.createElement('div');
+            div.setAttribute('data-item', u.id);
+            div.style.cssText = 'padding:8px 14px;cursor:pointer;border-bottom:1px solid #f5f5f5;font-size:13px;';
+            if (u.id == selectedId) div.style.background = '#e8f0fe';
+            div.innerHTML = '<strong>' + u.name + '</strong> <span style="color:#aaa;margin-left:6px;">(ID:' + u.id + ')</span>';
+            div.onmouseenter = function() { this.style.background = '#f0f7ff'; };
+            div.onmouseleave = function() { this.style.background = u.id == selectedId ? '#e8f0fe' : ''; };
+            div.onclick = function() {
+                input.value = u.name;
+                hidden.value = u.id;
+                selectedId = u.id;
+                closeDropdown();
+            };
+            listContainer.appendChild(div);
+        });
+    }
+
+    function openDropdown() {
+        if (isOpen) return;
+        isOpen = true;
+        if (!dropdown) createDropdown();
+        var rect = input.getBoundingClientRect();
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+        dropdown.style.display = 'block';
+        searchBox.value = '';
+        searchBox.focus();
+        renderList('');
+    }
+
+    function closeDropdown() {
+        isOpen = false;
+        if (dropdown) dropdown.style.display = 'none';
+    }
+
+    input.addEventListener('click', function() {
+        if (isOpen) closeDropdown(); else openDropdown();
+    });
+
+    input.addEventListener('mousedown', function(e) { e.preventDefault(); });
+
+    document.addEventListener('mousedown', function(e) {
+        if (isOpen && dropdown && !dropdown.contains(e.target) && e.target !== input) {
+            closeDropdown();
+        }
+    });
+})();
+
+// 每页显示数量切换
+document.getElementById('perPageSelect').addEventListener('change', function() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('per_page', this.value);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+});
+</script>
+{% endblock %}
